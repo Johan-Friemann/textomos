@@ -1,0 +1,16 @@
+version: '2'
+
+services:
+  tex-ray:
+    image: tex-ray
+    container_name: tex-ray
+    build: .
+    ports:
+      - "12345:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
