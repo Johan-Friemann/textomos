@@ -8,6 +8,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # bindings find some pre-compiled libraries supplied with the source code.
 ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
 
+# Install build dependencies.
 RUN apt update && apt upgrade -y && \
     apt install -y git \
                    build-essential \
@@ -19,6 +20,7 @@ RUN apt update && apt upgrade -y && \
                    freeglut3-dev \
                    xterm
 
+# Build base functionality of TexGen.
 RUN mkdir TexGen-install && mkdir stl-files && \
     git clone https://github.com/louisepb/TexGen.git && \
     cd TexGen && mkdir bin && cd bin && \
@@ -33,6 +35,7 @@ RUN mkdir TexGen-install && mkdir stl-files && \
           -B $PWD && \
     make && make install
 
+# Rebuild with python3 bindings.
 RUN cd TexGen/bin && \
     cmake -DCMAKE_INSTALL_PREFIX:STRING=/TexGen-install \
           -DBUILD_GUI:BOOL=OFF \
@@ -44,8 +47,10 @@ RUN cd TexGen/bin && \
           -B $PWD && \
     make && make install
 
+# Clean up!
 RUN rm -rf TexGen
 
+# Install python packages.
 RUN pip3 install numpy matplotlib tifffile gvxr torch
 
 CMD xterm
