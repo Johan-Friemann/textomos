@@ -7,8 +7,8 @@ services:
     build: .
     volumes:
       - type: bind
-        source: ./stl-files
-        target: /stl-files
+        source: ./tex-ray
+        target: /tex-ray
         read_only: false
       - type: bind
         source: /tmp/.X11-unix
