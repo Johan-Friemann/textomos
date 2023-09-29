@@ -20,10 +20,9 @@ services:
         read_only: true
     environment:
       - DISPLAY=${DISPLAY}
-      - NVIDIA_DRIVER_CAPABILITIES=all    
-    
-    devices:
-      - dev/dri:dev/dri
+      - NVIDIA_DRIVER_CAPABILITIES=all 
+      - __NV_PRIME_RENDER_OFFLOAD=1      # These two are needed for OpenGL
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia # to utilize the discrete laptop GPU.
     
     # This is for CUDA
     deploy:
@@ -33,3 +32,4 @@ services:
             - driver: nvidia
               capabilities: [compute, utility, graphics, display]
               device_ids: ['0']
+
