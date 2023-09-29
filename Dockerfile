@@ -1,5 +1,13 @@
 FROM ubuntu:latest
 
+# This environment variable is needed during build time to prevent apt getting
+# stuck on time-zone or keyboard layout selection prompts.
+ARG DEBIAN_FRONTEND=noninteractive
+
+# This environment variable is needed during run-time to let the TexGen python
+# bindings find some pre-compiled libraries supplied with the source code.
+ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
+
 RUN apt update && apt upgrade -y && \
     apt install -y git \
                    build-essential \
@@ -38,8 +46,6 @@ RUN cd TexGen/bin && \
 
 RUN rm -rf TexGen
 
-ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
-
-RUN pip3 install numpy matplotlib tifffile gvxr
+RUN pip3 install numpy matplotlib tifffile gvxr torch
 
 CMD xterm

@@ -1,16 +1,35 @@
-version: '2'
+version: '3'
 
 services:
   tex-ray:
     image: tex-ray
     container_name: tex-ray
     build: .
-    ports:
-      - "12345:8000"
+    volumes:
+      - type: bind
+        source: ./stl-files
+        target: /stl-files
+        read_only: false
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+        read_only: true
+      - type: bind
+        source: ${XAUTHORITY}
+        target: /root/.Xauthority
+        read_only: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_DRIVER_CAPABILITIES=all    
+    
+    devices:
+      - dev/dri:dev/dri
+    
+    # This is for CUDA
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+              capabilities: [compute, utility, graphics, display]
+              device_ids: ['0']
