@@ -50,10 +50,18 @@ def set_up_xray_source(energies=[], counts=[], unit="keV"):
     Returns:
         -
     """
+    if energies.empty():
+        raise ValueError("Bad argument: 'energies' argument needs to be" +
+                         "non-empty!")
+
+    if counts.empty():
+        raise ValueError("Bad argument: 'counts' argument needs to be" +
+                         "non-empty!")
 
     if len(energies) != len(counts):
         raise ValueError("Bad arguments: 'energies' and 'counts'" +
                          " must be of the same length!")
+    
     gvxr.resetBeamSpectrum()
     gvxr.usePointSource()
     if len(energies) == 1:
