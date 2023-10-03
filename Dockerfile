@@ -3,10 +3,6 @@ FROM nvidia/cuda:12.2.0-devel-ubuntu20.04
 # stuck on time-zone or keyboard layout selection prompts.
 ARG DEBIAN_FRONTEND=noninteractive
 
-# This environment variable is needed during run-time to let the TexGen python
-# bindings find some pre-compiled libraries supplied with the source code.
-ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
-
 # Install build dependencies.
 RUN apt update && apt upgrade -y && \
     apt install -y git \
@@ -40,7 +36,7 @@ RUN mkdir TexGen-install && mkdir stl-files && \
 RUN cd TexGen/bin && \
     cmake -DCMAKE_INSTALL_PREFIX:STRING=/TexGen-install \
           -DBUILD_GUI:BOOL=OFF \
-          -DPYTHON_SITEPACKAGES_DIR:STRING=$(python3 -c "import sysconfig; print(sysconfig.get_path('purelib'))") \
+          -DPYTHON_SITEPACKAGES_DIR:STRING=$(python3 -c "import site; print(site.getsitepackages()[0])") \
           -DPYTHON_INCLUDE_DIR=$(python3 -c "import sysconfig; print(sysconfig.get_path('include'))")  \
           -DBUILD_PYTHON_INTERFACE:BOOL=ON \
           -DBUILD_RENDERER:BOOL=OFF \
@@ -62,5 +58,9 @@ RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
                 --with-python=$(python3 -c "import sys; print(sys.executable)") \
                 --with-install-type=module && \
     make && make install
+
+# This environment variable is needed during run-time to let the TexGen python
+# bindings find some pre-compiled libraries supplied with the source code.
+ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
 
 CMD xterm
