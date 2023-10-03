@@ -61,4 +61,50 @@ def set_up_xray_source(energies, counts, unit="keV"):
     else:
         for energy, count in zip(energies, counts):
             gvxr.addEnergyBinToSpectrum(energy, unit, count)
+
+
+def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
+                  matrix_path, matrix_elements, matrix_ratios, matrix_density,
+                  unit="m"):
+    """Load fiber and matrix geometry and X-Ray absorption properties. 
+
+    Args:
+        fiber_geometry_path (string): The path to the fiber geometry mesh file.
+        fiber_elements (list(int)): The element numbers of the constituents of
+                                    the fiber material.
+        fiber_ratios (list(float)): The relative amount of the constituent
+                                    elements.
+        fiber_density (float): The density of the fiber material in g/cm^3.
+        matrix_geometry_path (string): The path to the matrix geometry mesh
+                                       file.
+        matrix_elements (list(int)): The element numbers of the constituents of
+                                     the matrix material.
+        matrix_ratios (list(float)): The relative amount of the constituent
+                                     elements.
+        matrix_density (float): The density of the matrix material in g/cm^3.
+
+    Keyword args:
+        unit (string): The unit of length (m, cm, mm, um).
+                       Default unit is m (meter).
     
+    Returns:
+        -
+    """
+
+    if len(fiber_elements) != len(fiber_ratios):
+        raise ValueError("Bad arguments: number of fiber ratios must agree " +
+                         "with the number of elements!")
+
+    gvxr.loadMeshFile("fiber", fiber_path, unit)
+    gvxr.setMixture("fiber", fiber_elements, fiber_ratios)
+    gvxr.setDensity("fiber", fiber_density, "g/cm3")
+    gvxr.moveToCentre("fiber")
+
+    if len(matrix_elements) != len(matrix_ratios):
+        raise ValueError("Bad arguments: number of matrix ratios must agree " +
+                         "with the number of elements!")
+
+    gvxr.loadMeshFile("matrix", matrix_path, unit)
+    gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
+    gvxr.setDensity("matrix", matrix_density, "g/cm3")
+    gvxr.moveToCentre("matrix")
