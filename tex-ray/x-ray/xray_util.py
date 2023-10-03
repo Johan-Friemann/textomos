@@ -32,18 +32,17 @@ def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
     gvxr.setDetectorPixelSize(detector_pixel_size, detector_pixel_size, unit)
 
 
-def set_up_xray_source(energies=[], counts=[], unit="keV"):
+def set_up_xray_source(energies, counts, unit="keV"):
     """Set up the gVirtualXRay X-Ray source. Only supports point source.
        The spectrum of the source is built by specifying photon energies and
        corresponding photon counts. If lists of length 1 are given a
        monochromatic source is set up.
 
     Args:
-        -
-
-    Keyword args:
         energies (list[float]): A list of X-Ray photon energies.
         counts (list[int]): A list of X-Ray photon counts.
+
+    Keyword args:
         unit (string): The unit of photon energy (eV, keV, MeV). The default is
                        keV (kilo electronvolt).
     
@@ -51,16 +50,17 @@ def set_up_xray_source(energies=[], counts=[], unit="keV"):
         -
     """
     if energies.empty():
-        raise ValueError("Bad argument: 'energies' argument needs to be" +
-                         "non-empty!")
+        raise ValueError("Bad argument: 1st argument 'energies' needs to be" +
+                         " non-empty!")
+
 
     if counts.empty():
-        raise ValueError("Bad argument: 'counts' argument needs to be" +
-                         "non-empty!")
+        raise ValueError("Bad argument: 2nd argument'counts' needs to be" +
+                         " non-empty!")
 
     if len(energies) != len(counts):
-        raise ValueError("Bad arguments: 'energies' and 'counts'" +
-                         " must be of the same length!")
+        raise ValueError("Bad arguments: 1st argument 'energies' and 2nd " +
+                         "argument 'counts' must be of the same length!")
     
     gvxr.resetBeamSpectrum()
     gvxr.usePointSource()
