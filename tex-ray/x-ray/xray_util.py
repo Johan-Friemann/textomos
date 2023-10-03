@@ -49,14 +49,6 @@ def set_up_xray_source(energies, counts, unit="keV"):
     Returns:
         -
     """
-    if energies.empty():
-        raise ValueError("Bad argument: 1st argument 'energies' needs to be" +
-                         " non-empty!")
-
-
-    if counts.empty():
-        raise ValueError("Bad argument: 2nd argument'counts' needs to be" +
-                         " non-empty!")
 
     if len(energies) != len(counts):
         raise ValueError("Bad arguments: 1st argument 'energies' and 2nd " +
