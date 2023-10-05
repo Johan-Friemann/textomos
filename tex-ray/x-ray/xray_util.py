@@ -1,6 +1,10 @@
 import numpy as np
 from gvxrPython3 import gvxr
 
+"""
+This file consists of helper functions to be called by the main X-Ray CT script.
+"""
+
 def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
                             detector_columns      , detector_rows           ,
                             detector_pixel_size   , unit="m"):
