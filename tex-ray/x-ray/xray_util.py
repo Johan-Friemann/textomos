@@ -1,3 +1,4 @@
+import numpy as np
 from gvxrPython3 import gvxr
 
 def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
@@ -115,3 +116,45 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
     gvxr.setDensity("matrix", matrix_density, "g/cm3")
     gvxr.moveToCentre("matrix")
+
+
+def perform_tomographic_scan(num_projections, scanning_angle, 
+                             display=False  , integrate_energy=True):
+    """Performa a tomographic scan consisting of a certain number of projections
+       and sweeping a certain angle. The scan rotates the sample clockwise
+       around the z-axis.
+
+    Args:
+        num_projections (int): The number of X-Ray projections.
+        scanning_angle (float): The scanning angle in degrees.
+
+    Keyword args:
+        display (bool): Will display the scanning scene if true.
+        integrate_energy (bool): If true the energy fluence is measured by the
+                                 detector. Photon count is measured if false.
+
+    Returns:
+        raw_projections (numpy array[float]): A numpy array of all measured
+                                              X-Ray projections. It has the size
+                                              num_projections * detector_rows *
+                                              detector_columns.
+    """
+    raw_projections = []
+    angular_step = scanning_angle/num_projections
+    for angle_id in range(0, num_projections):
+
+        # Compute an X-ray image    
+        xray_image = np.array(gvxr.computeXRayImage())
+
+        # Add to the set of projections
+        raw_projections.append(xray_image)
+
+        # Update the rendering
+        if display:
+            gvxr.displayScene()
+
+        # Rotate the sample
+        gvxr.rotateScene(-angular_step, 0, 0, 1)
+
+    raw_projections = np.array(raw_projections)
+    return raw_projections
