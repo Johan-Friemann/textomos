@@ -94,6 +94,9 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     if len(fiber_elements) != len(fiber_ratios):
         raise ValueError("Bad arguments: number of fiber ratios must agree " +
                          "with the number of elements!")
+    
+    if sum(fiber_ratios) != 1.0:
+        raise ValueError("Bad arguments: sum of fiber ratios must be 1.0.")
 
     gvxr.loadMeshFile("fiber", fiber_path, unit)
     gvxr.setMixture("fiber", fiber_elements, fiber_ratios)
@@ -103,6 +106,9 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     if len(matrix_elements) != len(matrix_ratios):
         raise ValueError("Bad arguments: number of matrix ratios must agree " +
                          "with the number of elements!")
+    
+    if sum(matrix_ratios) != 1.0:
+        raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
 
     gvxr.loadMeshFile("matrix", matrix_path, unit)
     gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
