@@ -110,7 +110,8 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     if sum(matrix_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
 
-    gvxr.loadMeshFile("matrix", matrix_path, unit)
+    gvxr.loadMeshFile("matrix", matrix_path, unit, False)
+    gvxr.addPolygonMeshAsOuterSurface("matrix")
     gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
     gvxr.setDensity("matrix", matrix_density, "g/cm3")
     gvxr.moveToCentre("matrix")
