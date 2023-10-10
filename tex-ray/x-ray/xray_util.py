@@ -16,15 +16,12 @@ Important things to bear in mind:
       the extracted data needs to be rescaled by the detector pixel size.
 """
 
-def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
-                            detector_columns      , detector_rows           ,
-                            detector_pixel_size   , unit="m"):
-    """Set up the gVirtualXRay scanner geometry. The reconstruction volume is
+def set_up_detector(distance_origin_detector, detector_columns, detector_rows,   
+                    detector_pixel_size, length_unit="m"):
+    """Set up the gVirtualXRay detector. Note that the reconstruction volume is 
        located at x=y=z=0.
 
     Args:
-        distance_source_origin (float): The distance from X-Ray source to the
-                                        origin of the reconstruction area.
         distance_origin_detector (float): The distance from the origin of the
                                           reconstruction area to the X-Ray
                                           detector.
@@ -33,35 +30,47 @@ def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
         detector_rows (int): The number of pixels in the height direction of the
                              detector.
     Keyword args:
-        unit (string): The unit of length measurement (m, cm, mm, um).
-                       Default unit is m (meter).
+        length_unit (string): The unit of length measurement (m, cm, mm, um).
+                              Default unit is m (meter).
 
     Returns:
         -
-    
     """
-
-    gvxr.setSourcePosition(-distance_source_origin,  0.0, 0.0, unit)
-    gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, unit)
     gvxr.setDetectorUpVector(0, 0, 1)
+    gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, length_unit)
     gvxr.setDetectorNumberOfPixels(detector_columns, detector_rows)
-    gvxr.setDetectorPixelSize(detector_pixel_size, detector_pixel_size, unit)
+    gvxr.setDetectorPixelSize(detector_pixel_size, detector_pixel_size,
+                              length_unit)
 
 
-def set_up_xray_source(energies, counts, unit="keV"):
-    """Set up the gVirtualXRay X-Ray source. Only supports point source.
+def set_up_xray_source(distance_source_origin, focal_spot_size,
+                       energies              , counts,
+                       sub_sources=2         , energy_unit="keV",
+                       length_unit="m"):
+    """Set up the gVirtualXRay X-Ray source. 
        The spectrum of the source is built by specifying photon energies and
        corresponding photon counts. If lists of length 1 are given a
        monochromatic source is set up.
 
     Args:
+        distance_source_origin (float): The distance from the source to the
+                                        origin of the reconstruction area.
+        focal_spot_size (float): The side length of the X-Ray source focal spot.
+                                 Will use a point source if non postive. 
         energies (list[float]): A list of X-Ray photon energies.
         counts (list[int]): A list of X-Ray photon counts.
 
     Keyword args:
-        unit (string): The unit of photon energy (eV, keV, MeV). The default is
-                       keV (kilo electronvolt).
-    
+        energy_unit (string): The unit of photon energy (eV, keV, MeV).
+                              The default is keV (kilo electronvolt).
+        length_unit (string): The unit of length measurement (m, cm, mm, um).
+                              Default unit is m (meter).
+        sub_sources (int): The number of sub point sources per axis to use for
+                           the focal spot. Note that a simulation is performed
+                           sub_sources cubed times, so the computational time
+                           can become long for many sources. However, a too
+                           small number of sources can cause aliasing.
+                           Default number is 2 sub sources.
     Returns:
         -
     """
@@ -71,12 +80,22 @@ def set_up_xray_source(energies, counts, unit="keV"):
                          "argument 'counts' must be of the same length!")
     
     gvxr.resetBeamSpectrum()
-    gvxr.usePointSource()
+
+    if focal_spot_size <= 0:
+        gvxr.setSourcePosition(-distance_source_origin,  0.0, 0.0, length_unit)
+        gvxr.usePointSource()
+    else:
+        raise NotImplementedError("gvxr currently does not have a correct " +
+                                  "implementation available in the python pkg.")
+        gvxr.setFocalSpot(-distance_source_origin, 0, 0, focal_spot_size,
+                          length_unit, sub_sources)
+    
+    
     if len(energies) == 1:
-        gvxr.setMonoChromatic(energies[0], unit, counts[0])
+        gvxr.setMonoChromatic(energies[0], energy_unit, counts[0])
     else:
         for energy, count in zip(energies, counts):
-            gvxr.addEnergyBinToSpectrum(energy, unit, count)
+            gvxr.addEnergyBinToSpectrum(energy, energy_unit, count)
 
 
 def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
