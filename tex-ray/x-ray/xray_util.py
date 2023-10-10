@@ -233,30 +233,32 @@ def measure_dark_field(integrate_energy=True):
 
     return dark_field_image
 
-def perform_flat_field_correction(raw_projections, integrate_energy=True):
-    """Perform flat field correction on a given set of raw projections.
+def perform_flat_field_correction(raw_projections, flat_field_image,
+                                  dark_field_image):
+    """Perform flat field correction on a given set of raw projections, based
+       on the provided flat- and dark fields.
 
     Args:
         raw_projections(numpy array[float]): A numpy array of the raw X-Ray
                                              projections. It has the shape 
                                              (num_projections, detector_rows,
                                              detector_columns).
+        flat_field_image(numpy array[float]): The detector flat field. It has 
+                                              the shape (detector_rows,
+                                              detector_columns).
+        dark_field_image(numpy array[float]): The detector dark field. It has
+                                              the shape (detector_rows,
+                                              detector_columns).
     
     Keyword args:
-        integrate_energy (bool): If true the energy fluence is measured by the
-                          detector. Photon count is measured if false.
+        -
     
     Returns:
         corrected_projections(numpy array[float]): A numpy array of all the 
                                                    corrected X-Ray projections.
-                                                   It has the shape 
-                                                   (num_projections, 
-                                                    detector_rows,
-                                                    detector_columns).
+                                                   It has the same shape as
+                                                   raw_projections.
     """
-    flat_field_image = measure_flat_field(integrate_energy)
-    dark_field_image = measure_dark_field(integrate_energy)
-
     corrected_projections = (raw_projections - dark_field_image) / \
                             (flat_field_image - dark_field_image)
     
