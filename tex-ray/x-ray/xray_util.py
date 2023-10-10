@@ -3,6 +3,17 @@ from gvxrPython3 import gvxr
 
 """
 This file consists of helper functions to be called by the main X-Ray CT script.
+
+Important things to bear in mind:
+    - The unit of energy in gVirtualXRay is MeV (mega electron volts), ergo
+      gvxr.computeXRayImage(...) returns X-Ray images in MeV when in energy
+      fluence mode. Additionally, gvxr.getUnitOfEnergy("MeV") returns 1.0.
+    - The unit of length in gVirtualXRay is mm (milimeter). Therefore the
+      function gvxr.getUnitOfLength("mm") returns 1.0.
+    - The data extracted from the negative log of the ratio of measured
+      intensity to initial intensitiy, will be in detector length units
+      (in pixel units). In order to compute for example, linear attenuation,
+      the extracted data needs to be rescaled by the detector pixel size.
 """
 
 def set_up_scanner_geometry(distance_source_origin, distance_origin_detector,
@@ -124,7 +135,7 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
 
 def perform_tomographic_scan(num_projections, scanning_angle, 
                              display=False  , integrate_energy=True):
-    """Performa a tomographic scan consisting of a certain number of projections
+    """Perform a tomographic scan consisting of a certain number of projections
        and sweeping a certain angle. The scan rotates the sample clockwise
        around the z-axis.
 
@@ -139,16 +150,16 @@ def perform_tomographic_scan(num_projections, scanning_angle,
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
-                                              X-Ray projections. It has the size
-                                              num_projections * detector_rows *
-                                              detector_columns.
+                                              X-Ray projections. It has the
+                                              shape (num_projections, 
+                                              detector_rows, detector_columns).
     """
     raw_projections = []
     angular_step = scanning_angle/num_projections
     for angle_id in range(0, num_projections):
 
         # Compute an X-ray image    
-        xray_image = np.array(gvxr.computeXRayImage())
+        xray_image = np.array(gvxr.computeXRayImage(integrate_energy))
 
         # Add to the set of projections
         raw_projections.append(xray_image)
@@ -162,3 +173,62 @@ def perform_tomographic_scan(num_projections, scanning_angle,
 
     raw_projections = np.array(raw_projections)
     return raw_projections
+
+def measure_flat_field(integrate_energy=True):
+    """Measure the flat field, i.e what the detector sees when the X-Ray source
+       is on but there is no sample present. Can measure the energy fluence flat
+       field, or the photon count flat field.
+
+    Args:
+        -
+    
+    Keyword args:
+        integrate_energy (bool): If true the energy fluence is measured by the
+                          detector. Photon count is measured if false.
+    
+    Returns:
+        flat_field_image(numpy array[float]): A numpy array containing the flat
+                                              field. It has the shape
+                                              (detector_rows, detector_columns). 
+    
+    """
+    detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
+    flat_field_image = np.ones((detector_rows, detector_columns))
+
+    energy_bins = gvxr.getEnergyBins("MeV")
+    photon_count_per_bin = gvxr.getPhotonCountEnergyBins()
+
+    # If not measuring the energy fluence, set energy bins to 1 [arb units] in
+    # order to return the total number of photons instead of total energy.
+    if not integrate_energy:
+        energy_bins = [1 for _ in range(len(energy_bins))]
+
+    total_energy = 0.0
+    for energy, count in zip(energy_bins, photon_count_per_bin):
+        total_energy += energy * count
+    flat_field_image *= total_energy
+
+    return flat_field_image
+
+def measure_dark_field(integrate_energy=True):
+    """Measure the dark field, i.e what the detector sees when the X-Ray source
+       is off. Can measure the energy fluence dark field, or the photon count
+       dark field.
+
+    Args:
+        -
+    
+    Keyword args:
+        integrate_energy (bool): If true the energy fluence is measured by the
+                          detector. Photon count is measured if false.
+    
+    Returns:
+        dark_field_image(numpy array[float]): A numpy array containing the dark
+                                              field. It has the shape
+                                              (detector_rows, detector_columns). 
+    
+    """
+    detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
+    dark_field_image = np.zeros((detector_rows, detector_columns))
+
+    return dark_field_image
