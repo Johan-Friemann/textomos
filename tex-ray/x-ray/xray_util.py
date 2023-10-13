@@ -100,7 +100,7 @@ def set_up_xray_source(distance_source_origin, focal_spot_size,
 
 def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
                   matrix_path, matrix_elements, matrix_ratios, matrix_density,
-                  unit="m"):
+                  length_unit="m"):
     """Load fiber and matrix geometry and X-Ray absorption properties. 
 
     Args:
@@ -119,8 +119,8 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
         matrix_density (float): The density of the matrix material in g/cm^3.
 
     Keyword args:
-        unit (string): The unit of length (m, cm, mm, um).
-                       Default unit is m (meter).
+        length_unit (string): The unit of length (m, cm, mm, um).
+                              Default unit is m (meter).
     
     Returns:
         -
@@ -133,7 +133,7 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     if sum(fiber_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of fiber ratios must be 1.0.")
 
-    gvxr.loadMeshFile("fiber", fiber_path, unit)
+    gvxr.loadMeshFile("fiber", fiber_path, length_unit)
     gvxr.setMixture("fiber", fiber_elements, fiber_ratios)
     gvxr.setDensity("fiber", fiber_density, "g/cm3")
     gvxr.moveToCentre("fiber")
@@ -145,7 +145,7 @@ def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
     if sum(matrix_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
 
-    gvxr.loadMeshFile("matrix", matrix_path, unit, False)
+    gvxr.loadMeshFile("matrix", matrix_path, length_unit, False)
     gvxr.addPolygonMeshAsOuterSurface("matrix")
     gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
     gvxr.setDensity("matrix", matrix_density, "g/cm3")
@@ -282,3 +282,40 @@ def perform_flat_field_correction(raw_projections, flat_field_image,
                             (flat_field_image - dark_field_image)
     
     return corrected_projections
+
+
+def neg_log_transform(corrected_projections, threshold):
+    """Perform the negative logarithm transform of flat field corrected
+       projections.
+
+    Args:
+        corrected_projections(numpy array[float]): A numpy array of the
+                                                   flat-field corrected X-Ray
+                                                   projections. It has the shape 
+                                                   (num_projections,
+                                                   detector_rows,
+                                                   detector_columns).
+        threshold (float): The threshold value. All elements less than threshold
+                           inside corrected_projections will be set to
+                           threshold before taking the negative logarithm.
+    
+    Keyword args:
+        -
+
+    Returns:
+        neg_log_projections(numpy array[float]): A numpy array containing the
+                                                 negative logarithm transformed
+                                                 data. It has the same shape as
+                                                 corrected_projection.
+    """
+
+    # make a copy in order to not modify the original projections when accessing
+    # array elements.
+    neg_log_projections = np.copy(corrected_projections)
+
+    # Take the threshold to prevent taking log of negative or zero values.
+    neg_log_projections[neg_log_projections < threshold] = threshold
+
+    neg_log_projections = -np.log(neg_log_projections)
+
+    return neg_log_projections
