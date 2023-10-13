@@ -4,6 +4,8 @@ from gvxrPython3 import gvxr
 """
 This file consists of helper functions to be called by the main X-Ray CT script.
 
+The helper functions are specifically related to the X-Ray image acquisition.
+
 Important things to bear in mind:
     - The unit of energy in gVirtualXRay is MeV (mega electron volts), ergo
       gvxr.computeXRayImage(...) returns X-Ray images in MeV when in energy
