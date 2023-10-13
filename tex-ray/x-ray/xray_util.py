@@ -10,10 +10,13 @@ Important things to bear in mind:
       fluence mode. Additionally, gvxr.getUnitOfEnergy("MeV") returns 1.0.
     - The unit of length in gVirtualXRay is mm (milimeter). Therefore the
       function gvxr.getUnitOfLength("mm") returns 1.0.
-    - The data extracted from the negative log of the ratio of measured
-      intensity to initial intensitiy, will be in detector length units
-      (in pixel units). In order to compute for example, linear attenuation,
-      the extracted data needs to be rescaled by the detector pixel size.
+    - The data measured by a sensor pixel is an integrated quantity, where the
+      signal pertains all rays that pass through the corresponding voxel in the
+      reconstruction volume. Specifically, if the 1D integral that equals to 
+      -ln(I/I_0) is sampled, the sampled value will itself be an integral along
+      the side of that pixel (or integral through the corresponding voxel). 
+      Therefore, in order to get the attenuation per unit length the values in
+      the reconstruction need to be rescaled by the voxel side length.
 """
 
 def set_up_detector(distance_origin_detector, detector_columns, detector_rows,   
