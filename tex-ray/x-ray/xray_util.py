@@ -22,7 +22,7 @@ Important things to bear in mind:
 def set_up_detector(distance_origin_detector, detector_columns, detector_rows,   
                     detector_pixel_size, length_unit="m"):
     """Set up the gVirtualXRay detector. Note that the reconstruction volume is 
-       located at x=y=z=0.
+       located at x=y=z=0. Only supports square detector pixels.
 
     Args:
         distance_origin_detector (float): The distance from the origin of the
@@ -32,6 +32,7 @@ def set_up_detector(distance_origin_detector, detector_columns, detector_rows,
                                 the detector.
         detector_rows (int): The number of pixels in the height direction of the
                              detector.
+        detector_pixel_size (float): The side length of the detector pixels.
     Keyword args:
         length_unit (string): The unit of length measurement (m, cm, mm, um).
                               Default unit is m (meter).
