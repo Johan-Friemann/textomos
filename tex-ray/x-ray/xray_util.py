@@ -33,6 +33,7 @@ def set_up_detector(distance_origin_detector, detector_columns, detector_rows,
         detector_rows (int): The number of pixels in the height direction of the
                              detector.
         detector_pixel_size (float): The side length of the detector pixels.
+
     Keyword args:
         length_unit (string): The unit of length measurement (m, cm, mm, um).
                               Default unit is m (meter).
