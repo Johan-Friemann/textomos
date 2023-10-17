@@ -14,7 +14,7 @@ config_dict['fiber_ratios'] = [1.0]
 
 config_dict['fiber_density'] = 1.8
 
-config_dict['matrix_path'] = "./tex-ray/matrix.stl"
+config_dict['matrix_path'] = "./tex-ray/meshes/matrix.stl"
 
 config_dict['matrix_elements'] = [6, 1, 17, 8]
 
@@ -22,7 +22,7 @@ config_dict['matrix_ratios'] = [0.404, 0.481, 0.019, 0.096]
 
 config_dict['matrix_density'] = 1.0
 
-config_dict['output_path'] = "./tex-ray/reconstruction.tif"
+config_dict['output_path'] = "./tex-ray/meshes/reconstruction.tif"
 
 config_dict['sample_length_unit'] = "mm"
 
