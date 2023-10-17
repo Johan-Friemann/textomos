@@ -1,10 +1,8 @@
-from gvxrPython3 import gvxr
-
 import numpy as np
 import astra
+from gvxrPython3 import gvxr
 
 from x_ray.x_ray_util import *
-
 
 def generate_sinograms(config_dict):
     """ Perform an X-Ray CT scan of a sample and return the sinograms.
