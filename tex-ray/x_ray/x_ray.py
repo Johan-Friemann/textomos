@@ -92,7 +92,9 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
     """
 
     projection_angles = np.linspace(
-        0, config_dict['scanning_angle'], config_dict['number_of_projections']
+        0,
+        np.deg2rad(config_dict['scanning_angle']),
+        config_dict['number_of_projections']
     )
 
     scale_factor = compute_astra_scale_factor(
