@@ -6,7 +6,7 @@ config_dict = {}
 
 config_dict['display'] = True
 
-config_dict['fiber_path'] = "./tex-ray/fiber.stl"
+config_dict['fiber_path'] = "./tex-ray/meshes/fiber.stl"
 
 config_dict['fiber_elements'] = [6]
 
@@ -22,7 +22,7 @@ config_dict['matrix_ratios'] = [0.404, 0.481, 0.019, 0.096]
 
 config_dict['matrix_density'] = 1.0
 
-config_dict['output_path'] = "./tex-ray/meshes/reconstruction.tif"
+config_dict['output_path'] = "./tex-ray/reconstruction.tif"
 
 config_dict['sample_length_unit'] = "mm"
 
