@@ -139,8 +139,8 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
                     )
     
     
-    # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale it with 1000.
-    unit_scale = gvxr.getUnitOfLength(config_dict['scanner_length_unit']) * 1000
+    # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale from 1000.
+    unit_scale = 1000 / gvxr.getUnitOfLength(config_dict['scanner_length_unit'])
 
     # Rescale to get attenuation coefficient in cm^-1.
     reconstruction *= unit_scale / 100
