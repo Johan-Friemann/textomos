@@ -4,11 +4,16 @@ from gvxrPython3 import gvxr
 
 from x_ray.x_ray_util import *
 
+"""
+This file contains the main routines for generating sinograms of woven composite
+material meshes and the tomographic reconstructions of the same. 
+"""
+
 def generate_sinograms(config_dict):
     """ Perform an X-Ray CT scan of a sample and return the sinograms.
 
     Args:
-        config_dict (dictionary): A dictionary of options.
+        config_dict (dictionary): A dictionary of tex_ray options.
 
     Keyword args:
         -
@@ -74,7 +79,7 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
         sinograms (numpy array[float]): The measured CT sinograms. The array has
                                         the shape (detector_rows,
                                         number_of_projections, detector_columns)
-        config_dict (dictionary): A dictionary of options.
+        config_dict (dictionary): A dictionary of tex_ray options.
 
     Keyword args:
         -
@@ -131,4 +136,11 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
                       config_dict['distance_origin_detector']
                     )
     
+    
+    # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale it with 1000.
+    unit_scale = gvxr.getUnitOfLength(config_dict['scanner_length_unit']) * 1000
+
+    # Rescale to get attenuation coefficient in cm^-1.
+    reconstruction *= unit_scale / 100
+
     return reconstruction
