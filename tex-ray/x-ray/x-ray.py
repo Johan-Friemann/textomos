@@ -71,7 +71,7 @@ def generate_sinograms(config_dict):
 
 
 def perform_tomographic_reconstruction(sinograms, config_dict):
-    """Perform a tomographic reconstruction given a set of sinograms.
+    """Perform a tomographic reconstruction with ASTRA given a set of sinograms.
     
     Args:
         sinograms (numpy array[float]): The measured CT sinograms. The array has
@@ -193,7 +193,5 @@ config_dict['reconstruction_algorithm'] = 'FDK_CUDA'
 
 sinograms = generate_sinograms(config_dict)
 reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
-
-print(reconstruction.shape)
 
 tifffile.imwrite(config_dict['output_path'], reconstruction)
