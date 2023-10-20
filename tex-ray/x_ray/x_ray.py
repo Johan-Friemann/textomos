@@ -72,7 +72,8 @@ def generate_sinograms(config_dict):
     return sinograms
 
 
-def perform_tomographic_reconstruction(sinograms, config_dict):
+def perform_tomographic_reconstruction(sinograms, config_dict,
+                                       align_coordinates=True):
     """Perform a tomographic reconstruction with ASTRA given a set of sinograms.
     
     Args:
@@ -82,7 +83,10 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
         config_dict (dictionary): A dictionary of tex_ray options.
 
     Keyword args:
-        -
+        align_coordinates (bool): If true the coordinate system of the
+                                  reconstructed volume is rotated 90 degrees
+                                  around the z-axis, such that the coordinate
+                                  system is the same as for the input stl file.
 
     Returns:
         reconstruction (numpy array[float]): The reconstructed sample. The array
@@ -144,5 +148,10 @@ def perform_tomographic_reconstruction(sinograms, config_dict):
 
     # Rescale to get attenuation coefficient in cm^-1.
     reconstruction *= unit_scale / 100
+
+    # Rotate the coordinates 90 degrees around the positive z-axis.
+    if align_coordinates:
+        reconstruction = np.swapaxes(reconstruction, 1, 2)
+        reconstruction = np.flip(reconstruction, axis=1)
 
     return reconstruction
