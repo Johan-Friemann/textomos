@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.0-devel-ubuntu20.04
+FROM nvidia/cuda:12.3.1-devel-ubuntu20.04
 # This environment variable is needed during build time to prevent apt getting
 # stuck on time-zone or keyboard layout selection prompts.
 ARG DEBIAN_FRONTEND=noninteractive
