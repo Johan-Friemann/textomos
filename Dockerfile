@@ -49,7 +49,7 @@ RUN rm -rf TexGen
 
 # Install python packages.
 RUN pip3 install numpy numpy-stl scipy Cython matplotlib tifffile gvxr torch \
-    stl-to-voxel
+    stl-to-voxel meshio olefile
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
