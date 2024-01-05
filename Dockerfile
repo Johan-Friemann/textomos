@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.3.1-devel-ubuntu20.04
+FROM nvidia/cuda:12.2.0-devel-ubuntu20.04
 # This environment variable is needed during build time to prevent apt getting
 # stuck on time-zone or keyboard layout selection prompts.
 ARG DEBIAN_FRONTEND=noninteractive
@@ -48,8 +48,9 @@ RUN cd TexGen/bin && \
 RUN rm -rf TexGen
 
 # Install python packages.
-RUN pip3 install numpy numpy-stl scipy Cython matplotlib tifffile gvxr torch \
-    stl-to-voxel meshio olefile
+RUN pip3 install git+https://bitbucket.org/spekpy/spekpy_release.git \
+        numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr torch \
+        stl-to-voxel meshio olefile 
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
@@ -64,4 +65,4 @@ RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
 # bindings find some pre-compiled libraries supplied with the source code.
 ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/TexGen-install/"
 
-CMD xterm
+CMD xterm -fa 'Monospace' -fs 28 -fg green -bg black
