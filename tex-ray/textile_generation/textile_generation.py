@@ -35,15 +35,15 @@ def create_layer2layer_unit_cell(
         weft_to_warp_ratio (float): A number between 0 and 1 that determines how
                                    thick weft yarns are in relation to the warp
                                    yarns.
-                                 
+
         weave_pattern (list[list[int]]): A list containing lists of length 3.
             The list decides which crossing points to "push up" or "push down"
             in order to generate the textile weave pattern. The first element in
             the list of length 3 refers to the weft number, the second element
             refers to the warp number and the third element is 1 for "push up",
-            or -1 for "push down". A "push" will move all the warp yarns at the 
+            or -1 for "push down". A "push" will move all the warp yarns at the
             selected location either one layer up or down.
-    
+
     Keyword args:
         -
 
@@ -163,3 +163,41 @@ def boolean_difference_post_processing(weft_path, warp_path):
     mesh_set.load_new_mesh(weft_path)
     mesh_set.generate_boolean_difference()
     mesh_set.save_current_mesh(weft_path)
+
+
+def generate_unit_cell(config_dict):
+    """ Generate a woven composite unit cell and create a mesh for weft yarns,
+        warp yarns, and matrix respectively.
+
+        Args:
+            config_dict (dictionary): A dictionary of tex_ray options.
+
+        Keyword args:
+            -
+
+        Returns:
+            -
+    """
+    Weft, Warp = create_layer2layer_unit_cell(
+        config_dict["unit_cell_weft_length"],
+        config_dict["unit_cell_warp_length"],
+        config_dict["unit_cell_thickness"],
+        config_dict["weft_yarns_per_layer"],
+        config_dict["warp_yarns_per_layer"],
+        config_dict["number_of_yarn_layers"],
+        config_dict["yarn_width_to_spacing_ratio"],
+        config_dict["weft_to_warp_ratio"],
+        config_dict["weave_pattern"],
+    )
+
+    write_layer_to_layer_unit_cell_mesh(
+        Weft,
+        Warp,
+        config_dict["weft_path"],
+        config_dict["warp_path"],
+        config_dict["matrix_path"],
+    )
+
+    boolean_difference_post_processing(
+        config_dict["weft_path"], config_dict["warp"]
+    )
