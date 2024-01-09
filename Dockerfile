@@ -50,7 +50,7 @@ RUN rm -rf TexGen
 # Install python packages.
 RUN pip3 install git+https://bitbucket.org/spekpy/spekpy_release.git \
         numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr torch \
-        stl-to-voxel meshio olefile 
+        stl-to-voxel meshio pymeshlab olefile 
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
