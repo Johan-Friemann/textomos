@@ -71,7 +71,8 @@ config_dict["threshold"] = 0.000000001
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 ################################################################################
 
-generate_unit_cell(config_dict)
+# Uncomment when weft-warp has been implemented in x_ray
+#generate_unit_cell(config_dict)
 
 sinograms = generate_sinograms(config_dict)
 reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
