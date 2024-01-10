@@ -64,6 +64,20 @@ config_dict["energy_unit"] = "keV"
 
 config_dict["detector_pixel_size"] = 0.008
 
+config_dict['distance_source_origin'] = 10
+
+config_dict['distance_origin_detector'] = 6
+
+config_dict['detector_rows'] = 100
+
+config_dict['detector_columns'] = 640
+
+config_dict['x_ray_energies'] = [80]
+
+config_dict['x_ray_counts'] = [100]
+
+config_dict['number_of_projections'] = 102
+
 config_dict["scanning_angle"] = 360
 
 config_dict["threshold"] = 0.000000001
