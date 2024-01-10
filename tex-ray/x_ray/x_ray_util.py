@@ -19,9 +19,15 @@ Important things to bear in mind:
       the reconstruction need to be rescaled by the voxel side length.
 """
 
-def set_up_detector(distance_origin_detector, detector_columns, detector_rows,   
-                    detector_pixel_size, length_unit="m"):
-    """Set up the gVirtualXRay detector. Note that the reconstruction volume is 
+
+def set_up_detector(
+    distance_origin_detector,
+    detector_columns,
+    detector_rows,
+    detector_pixel_size,
+    length_unit="m",
+):
+    """Set up the gVirtualXRay detector. Note that the reconstruction volume is
        located at x=y=z=0. Only supports square detector pixels.
 
     Args:
@@ -44,15 +50,21 @@ def set_up_detector(distance_origin_detector, detector_columns, detector_rows,
     gvxr.setDetectorUpVector(0, 0, 1)
     gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, length_unit)
     gvxr.setDetectorNumberOfPixels(detector_columns, detector_rows)
-    gvxr.setDetectorPixelSize(detector_pixel_size, detector_pixel_size,
-                              length_unit)
+    gvxr.setDetectorPixelSize(
+        detector_pixel_size, detector_pixel_size, length_unit
+    )
 
 
-def set_up_xray_source(distance_source_origin, focal_spot_size,
-                       energies              , counts,
-                       sub_sources=2         , energy_unit="keV",
-                       length_unit="m"):
-    """Set up the gVirtualXRay X-Ray source. 
+def set_up_xray_source(
+    distance_source_origin,
+    focal_spot_size,
+    energies,
+    counts,
+    sub_sources=2,
+    energy_unit="keV",
+    length_unit="m",
+):
+    """Set up the gVirtualXRay X-Ray source.
        The spectrum of the source is built by specifying photon energies and
        corresponding photon counts. If lists of length 1 are given a
        monochromatic source is set up.
@@ -61,7 +73,7 @@ def set_up_xray_source(distance_source_origin, focal_spot_size,
         distance_source_origin (float): The distance from the source to the
                                         origin of the reconstruction area.
         focal_spot_size (float): The side length of the X-Ray source focal spot.
-                                 Will use a point source if non postive. 
+                                 Will use a point source if non postive.
         energies (list[float]): A list of X-Ray photon energies.
         counts (list[int]): A list of X-Ray photon counts.
 
@@ -81,21 +93,30 @@ def set_up_xray_source(distance_source_origin, focal_spot_size,
     """
 
     if len(energies) != len(counts):
-        raise ValueError("Bad arguments: 1st argument 'energies' and 2nd " +
-                         "argument 'counts' must be of the same length!")
-    
+        raise ValueError(
+            "Bad arguments: 1st argument 'energies' and 2nd "
+            + "argument 'counts' must be of the same length!"
+        )
+
     gvxr.resetBeamSpectrum()
 
     if focal_spot_size <= 0:
-        gvxr.setSourcePosition(-distance_source_origin,  0.0, 0.0, length_unit)
+        gvxr.setSourcePosition(-distance_source_origin, 0.0, 0.0, length_unit)
         gvxr.usePointSource()
     else:
-        raise NotImplementedError("gvxr currently does not have a correct " +
-                                  "implementation available in the python pkg.")
-        gvxr.setFocalSpot(-distance_source_origin, 0, 0, focal_spot_size,
-                          length_unit, sub_sources)
-    
-    
+        raise NotImplementedError(
+            "gvxr currently does not have a correct "
+            + "implementation available in the python pkg."
+        )
+        gvxr.setFocalSpot(
+            -distance_source_origin,
+            0,
+            0,
+            focal_spot_size,
+            length_unit,
+            sub_sources,
+        )
+
     if len(energies) == 1:
         gvxr.setMonoChromatic(energies[0], energy_unit, counts[0])
     else:
@@ -103,62 +124,88 @@ def set_up_xray_source(distance_source_origin, focal_spot_size,
             gvxr.addEnergyBinToSpectrum(energy, energy_unit, count)
 
 
-def set_up_sample(fiber_path , fiber_elements , fiber_ratios , fiber_density ,
-                  matrix_path, matrix_elements, matrix_ratios, matrix_density,
-                  length_unit="m"):
-    """Load fiber and matrix geometry and X-Ray absorption properties. 
+def set_up_sample(
+    weft_path,
+    weft_elements,
+    weft_ratios,
+    weft_density,
+    warp_path,
+    warp_elements,
+    warp_ratios,
+    warp_density,
+    matrix_path,
+    matrix_elements,
+    matrix_ratios,
+    matrix_density,
+    length_unit="m",
+):
+    """Load yarn (weft and warp) and matrix geometries and X-Ray absorption
+       properties.
 
     Args:
-        fiber_geometry_path (string): The path to the fiber geometry mesh file.
-        fiber_elements (list(int)): The element numbers of the constituents of
-                                    the fiber material.
-        fiber_ratios (list(float)): The relative amount of the constituent
-                                    elements.
-        fiber_density (float): The density of the fiber material in g/cm^3.
-        matrix_geometry_path (string): The path to the matrix geometry mesh
-                                       file.
-        matrix_elements (list(int)): The element numbers of the constituents of
-                                     the matrix material.
-        matrix_ratios (list(float)): The relative amount of the constituent
-                                     elements.
-        matrix_density (float): The density of the matrix material in g/cm^3.
-
-    Keyword args:
-        length_unit (string): The unit of length (m, cm, mm, um).
-                              Default unit is m (meter).
-    
-    Returns:
-        -
+        weft_geometry_path (string): The absolute path (including file name) to
+                                     the weft geometry mesh file.
+        weft_elements (list(int)): The element numbers of the constituents of
+                                   the weft material.
+        weft_ratios (list(float)): The relative amount of the constituent
+                                    elements of the weft material.
+        weft_density (float): The density of the weft material in g/cm^3.
+        warp_geometry_path (string): The absolute path (including file name) to
+                                     the warp geometry mesh file.
+        warp_elements (list(int)): The element numbers of the constituents of
+                                   the warp material.
+        warp_ratios (list(float)): The relative amount of the constituent
+                                   elements of the warp material.
+        warp_density (float): The density of the warp material in g/cm^3.
     """
 
-    if len(fiber_elements) != len(fiber_ratios):
-        raise ValueError("Bad arguments: number of fiber ratios must agree " +
-                         "with the number of elements!")
-    
-    if sum(fiber_ratios) != 1.0:
-        raise ValueError("Bad arguments: sum of fiber ratios must be 1.0.")
+    if len(weft_elements) != len(weft_ratios):
+        raise ValueError(
+            "Bad arguments: number of weft ratios must agree "
+            + "with the number of elements!"
+        )
 
-    gvxr.loadMeshFile("fiber", fiber_path, length_unit)
-    gvxr.setMixture("fiber", fiber_elements, fiber_ratios)
-    gvxr.setDensity("fiber", fiber_density, "g/cm3")
-    gvxr.moveToCentre("fiber")
+    if sum(weft_ratios) != 1.0:
+        raise ValueError("Bad arguments: sum of weft ratios must be 1.0.")
+
+    gvxr.loadMeshFile("weft", weft_path, length_unit)
+    gvxr.setMixture("weft", weft_elements, weft_ratios)
+    gvxr.setDensity("weft", weft_density, "g/cm3")
+    gvxr.moveToCentre("weft")
+
+    if len(warp_elements) != len(warp_ratios):
+        raise ValueError(
+            "Bad arguments: number of warp ratios must agree "
+            + "with the number of elements!"
+        )
+
+    if sum(warp_ratios) != 1.0:
+        raise ValueError("Bad arguments: sum of warp ratios must be 1.0.")
+
+    gvxr.loadMeshFile("warp", warp_path, length_unit)
+    gvxr.setMixture("warp", warp_elements, weft_ratios)
+    gvxr.setDensity("warp", warp_density, "g/cm3")
+    gvxr.moveToCentre("warp")
 
     if len(matrix_elements) != len(matrix_ratios):
-        raise ValueError("Bad arguments: number of matrix ratios must agree " +
-                         "with the number of elements!")
-    
+        raise ValueError(
+            "Bad arguments: number of matrix ratios must agree "
+            + "with the number of elements!"
+        )
+
     if sum(matrix_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
 
-    gvxr.loadMeshFile("matrix", matrix_path, length_unit, False)
+    gvxr.loadMeshFile("matrix", matrix_path, length_unit, False)  # Not inner
     gvxr.addPolygonMeshAsOuterSurface("matrix")
     gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
     gvxr.setDensity("matrix", matrix_density, "g/cm3")
     gvxr.moveToCentre("matrix")
 
 
-def perform_tomographic_scan(num_projections, scanning_angle, 
-                             display=False  , integrate_energy=True):
+def perform_tomographic_scan(
+    num_projections, scanning_angle, display=False, integrate_energy=True
+):
     """Perform a tomographic scan consisting of a certain number of projections
        and sweeping a certain angle. The scan rotates the sample clockwise
        around the z-axis.
@@ -175,28 +222,30 @@ def perform_tomographic_scan(num_projections, scanning_angle,
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
                                               X-Ray projections. It has the
-                                              shape (num_projections, 
+                                              shape (num_projections,
                                               detector_rows, detector_columns).
     """
-    raw_projections = []
-    angular_step = scanning_angle/num_projections
+    detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
+    raw_projections = np.empty(
+        (num_projections, detector_rows, detector_columns)
+    )
+
+    angular_step = scanning_angle / num_projections
     for angle_id in range(0, num_projections):
+        # Compute an X-ray image and add it to the set of projections.
+        raw_projections[angle_id] = np.array(
+            gvxr.computeXRayImage(integrate_energy)
+        )
 
-        # Compute an X-ray image    
-        xray_image = np.array(gvxr.computeXRayImage(integrate_energy))
-
-        # Add to the set of projections
-        raw_projections.append(xray_image)
-
-        # Update the rendering
+        # Update the rendering if display.
         if display:
             gvxr.displayScene()
 
         # Rotate the sample
         gvxr.rotateScene(-angular_step, 0, 0, 1)
 
-    raw_projections = np.array(raw_projections)
     return raw_projections
+
 
 def measure_flat_field(integrate_energy=True):
     """Measure the flat field, i.e what the detector sees when the X-Ray source
@@ -205,16 +254,16 @@ def measure_flat_field(integrate_energy=True):
 
     Args:
         -
-    
+
     Keyword args:
         integrate_energy (bool): If true the energy fluence is measured by the
                           detector. Photon count is measured if false.
-    
+
     Returns:
         flat_field_image(numpy array[float]): A numpy array containing the flat
                                               field. It has the shape
-                                              (detector_rows, detector_columns). 
-    
+                                              (detector_rows, detector_columns).
+
     """
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
@@ -234,6 +283,7 @@ def measure_flat_field(integrate_energy=True):
 
     return flat_field_image
 
+
 def measure_dark_field(integrate_energy=True):
     """Measure the dark field, i.e what the detector sees when the X-Ray source
        is off. Can measure the energy fluence dark field, or the photon count
@@ -241,51 +291,54 @@ def measure_dark_field(integrate_energy=True):
 
     Args:
         -
-    
+
     Keyword args:
         integrate_energy (bool): If true the energy fluence is measured by the
                           detector. Photon count is measured if false.
-    
+
     Returns:
         dark_field_image(numpy array[float]): A numpy array containing the dark
                                               field. It has the shape
-                                              (detector_rows, detector_columns). 
-    
+                                              (detector_rows, detector_columns).
+
     """
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     dark_field_image = np.zeros((detector_rows, detector_columns))
 
     return dark_field_image
 
-def perform_flat_field_correction(raw_projections, flat_field_image,
-                                  dark_field_image):
+
+def perform_flat_field_correction(
+    raw_projections, flat_field_image, dark_field_image
+):
     """Perform flat field correction on a given set of raw projections, based
        on the provided flat- and dark fields.
 
     Args:
         raw_projections(numpy array[float]): A numpy array of the raw X-Ray
-                                             projections. It has the shape 
+                                             projections. It has the shape
                                              (num_projections, detector_rows,
                                              detector_columns).
-        flat_field_image(numpy array[float]): The detector flat field. It has 
+        flat_field_image(numpy array[float]): The detector flat field. It has
                                               the shape (detector_rows,
                                               detector_columns).
         dark_field_image(numpy array[float]): The detector dark field. It has
                                               the shape (detector_rows,
                                               detector_columns).
-    
+
     Keyword args:
         -
-    
+
     Returns:
-        corrected_projections(numpy array[float]): A numpy array of all the 
+        corrected_projections(numpy array[float]): A numpy array of all the
                                                    corrected X-Ray projections.
                                                    It has the same shape as
                                                    raw_projections.
     """
-    corrected_projections = (raw_projections - dark_field_image) / \
-                            (flat_field_image - dark_field_image)
-    
+    corrected_projections = (raw_projections - dark_field_image) / (
+        flat_field_image - dark_field_image
+    )
+
     return corrected_projections
 
 
@@ -296,14 +349,14 @@ def neg_log_transform(corrected_projections, threshold):
     Args:
         corrected_projections(numpy array[float]): A numpy array of the
                                                    flat-field corrected X-Ray
-                                                   projections. It has the shape 
+                                                   projections. It has the shape
                                                    (num_projections,
                                                    detector_rows,
                                                    detector_columns).
         threshold (float): The threshold value. All elements less than threshold
                            inside corrected_projections will be set to
                            threshold before taking the negative logarithm.
-    
+
     Keyword args:
         -
 
@@ -326,9 +379,10 @@ def neg_log_transform(corrected_projections, threshold):
     return neg_log_projections
 
 
-def compute_astra_scale_factor(distance_source_origin, distance_origin_detector,
-                               detector_pixel_size):
-    """ Compute the ASTRA scale factor for conical beam geometry. 
+def compute_astra_scale_factor(
+    distance_source_origin, distance_origin_detector, detector_pixel_size
+):
+    """Compute the ASTRA scale factor for conical beam geometry.
         The ASTRA toolbox requires the reconstruction volume to be set up such
         that the reconstruction voxels have size 1. This function computes the
         scale factor that all projection geometry distances need to be re-scaled
@@ -343,12 +397,14 @@ def compute_astra_scale_factor(distance_source_origin, distance_origin_detector,
 
     Keyword args:
         -
-    
+
     Returns:
         scale_factor (float): The ASTRA scale factor.
 
     """
-    scale_factor = 1 / (detector_pixel_size * distance_source_origin / 
-        (distance_source_origin + distance_origin_detector)
+    scale_factor = 1 / (
+        detector_pixel_size
+        * distance_source_origin
+        / (distance_source_origin + distance_origin_detector)
     )
     return scale_factor
