@@ -41,10 +41,14 @@ def generate_sinograms(config_dict):
         energy_unit=config_dict['energy_unit']
     )
     set_up_sample(
-        config_dict['fiber_path'],
-        config_dict['fiber_elements'],
-        config_dict['fiber_ratios'],
-        config_dict['fiber_density'],
+        config_dict['weft_path'],
+        config_dict['weft_elements'],
+        config_dict['weft_ratios'],
+        config_dict['weft_density'],
+        config_dict['warp_path'],
+        config_dict['warp_elements'],
+        config_dict['warp_ratios'],
+        config_dict['warp_density'],
         config_dict['matrix_path'],
         config_dict['matrix_elements'],
         config_dict['matrix_ratios'],
@@ -56,6 +60,9 @@ def generate_sinograms(config_dict):
         config_dict['scanning_angle'],
         display=config_dict['display']
     )
+    # After finishing the tomographic constructions it is safe to close window.
+    gvxr.destroyWindow()
+
     flat_field_image = measure_flat_field()
     dark_field_image = measure_dark_field()
     corrected_projections = perform_flat_field_correction(raw_projections,
@@ -64,10 +71,9 @@ def generate_sinograms(config_dict):
     neg_log_projections = neg_log_transform(
         corrected_projections, config_dict['threshold']
     )
-
+    
     # Reformat the projections into a set of sinograms on the ASTRA form.
     sinograms = np.swapaxes(neg_log_projections, 0, 1)
-    sinograms = np.array(sinograms).astype(np.single)
 
     return sinograms
 

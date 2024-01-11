@@ -199,5 +199,5 @@ def generate_unit_cell(config_dict):
     )
 
     boolean_difference_post_processing(
-        config_dict["weft_path"], config_dict["warp"]
+        config_dict["weft_path"], config_dict["warp_path"]
     )
