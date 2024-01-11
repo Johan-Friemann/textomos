@@ -165,18 +165,64 @@ def boolean_difference_post_processing(weft_path, warp_path):
     mesh_set.save_current_mesh(weft_path)
 
 
+def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
+    """Use PyMeshLab's "Transform: Translate, Center, set Origin" method to set
+       the  mesh's origin to its barycenter. This overwrites the original files.
+
+    Args:
+        weft_path (str): The absolute path (including file name) to the weft
+                         mesh.
+
+        warp_path (str): The absolute path (including file name) to the warp
+                         mesh.
+
+        matrix_path (str): The absolute path (including file name) to the matrix
+                           mesh.
+
+
+    Keyword args:
+        -
+
+    Returns:
+        -
+    """
+    # We know that the matrix is the bounding box, so we use it to compute
+    # the barycenter.
+    mesh_set = pml.MeshSet()
+    mesh_set.load_new_mesh(matrix_path)
+    barycenter = mesh_set.get_geometric_measures()["barycenter"]
+    mesh_set.compute_matrix_from_translation(
+        traslmethod="Set new Origin", neworigin=barycenter
+    )
+    mesh_set.save_current_mesh(matrix_path)
+
+    mesh_set = pml.MeshSet()
+    mesh_set.load_new_mesh(weft_path)
+    mesh_set.compute_matrix_from_translation(
+        traslmethod="Set new Origin", neworigin=barycenter
+    )
+    mesh_set.save_current_mesh(weft_path)
+
+    mesh_set = pml.MeshSet()
+    mesh_set.load_new_mesh(warp_path)
+    mesh_set.compute_matrix_from_translation(
+        traslmethod="Set new Origin", neworigin=barycenter
+    )
+    mesh_set.save_current_mesh(warp_path)
+
+
 def generate_unit_cell(config_dict):
-    """ Generate a woven composite unit cell and create a mesh for weft yarns,
-        warp yarns, and matrix respectively.
+    """Generate a woven composite unit cell and create a mesh for weft yarns,
+    warp yarns, and matrix respectively.
 
-        Args:
-            config_dict (dictionary): A dictionary of tex_ray options.
+    Args:
+        config_dict (dictionary): A dictionary of tex_ray options.
 
-        Keyword args:
-            -
+    Keyword args:
+        -
 
-        Returns:
-            -
+    Returns:
+        -
     """
     Weft, Warp = create_layer2layer_unit_cell(
         config_dict["unit_cell_weft_length"],
@@ -200,4 +246,10 @@ def generate_unit_cell(config_dict):
 
     boolean_difference_post_processing(
         config_dict["weft_path"], config_dict["warp_path"]
+    )
+
+    set_origin_to_barycenter(
+        config_dict["weft_path"],
+        config_dict["warp_path"],
+        config_dict["matrix_path"],
     )
