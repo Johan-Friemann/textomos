@@ -38,15 +38,21 @@ config_dict["weave_pattern"] = [
     [5, 3, -1],
 ]
 
-config_dict["display"] = True
+config_dict["weft_path"] = "./tex-ray/meshes/weft.stl"
 
-config_dict["fiber_path"] = "./tex-ray/meshes/fiber.stl"
+config_dict["weft_elements"] = [6]
 
-config_dict["fiber_elements"] = [6]
+config_dict["weft_ratios"] = [1.0]
 
-config_dict["fiber_ratios"] = [1.0]
+config_dict["weft_density"] = 1.8
 
-config_dict["fiber_density"] = 1.8
+config_dict["warp_path"] = "./tex-ray/meshes/warp.stl"
+
+config_dict["warp_elements"] = [6]
+
+config_dict["warp_ratios"] = [1.0]
+
+config_dict["warp_density"] = 1.8
 
 config_dict["matrix_elements"] = [6, 1, 17, 8]
 
@@ -58,34 +64,35 @@ config_dict["output_path"] = "./tex-ray/reconstructions/reconstruction.tif"
 
 config_dict["sample_length_unit"] = "mm"
 
-config_dict["scanner_length_unit"] = "cm"
+config_dict["scanner_length_unit"] = "mm"
 
 config_dict["energy_unit"] = "keV"
 
-config_dict["detector_pixel_size"] = 0.008
+config_dict["detector_pixel_size"] = 0.03375*2
 
-config_dict['distance_source_origin'] = 10
+config_dict['distance_source_origin'] = 60
 
-config_dict['distance_origin_detector'] = 6
+config_dict['distance_origin_detector'] = 80
 
-config_dict['detector_rows'] = 100
+config_dict['detector_rows'] = 2048//2
 
-config_dict['detector_columns'] = 640
+config_dict['detector_columns'] = 2048//2
 
 config_dict['x_ray_energies'] = [80]
 
 config_dict['x_ray_counts'] = [100]
 
-config_dict['number_of_projections'] = 102
+config_dict['number_of_projections'] = 100
 
 config_dict["scanning_angle"] = 360
 
 config_dict["threshold"] = 0.000000001
 
+config_dict["display"] = True
+
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 ################################################################################
 
-# Uncomment when weft-warp has been implemented in x_ray
 #generate_unit_cell(config_dict)
 
 sinograms = generate_sinograms(config_dict)
