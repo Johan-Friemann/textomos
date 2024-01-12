@@ -60,6 +60,14 @@ config_dict["matrix_ratios"] = [0.404, 0.481, 0.019, 0.096]
 
 config_dict["matrix_density"] = 1.0
 
+config_dict["offset"] = [0, 0, 0]
+
+config_dict["tilt"] = [0, 0, 0]
+
+config_dict["rot_axis"] = "x"
+
+config_dict["tiling"] = [2, 3, 3]
+
 config_dict["output_path"] = "./tex-ray/reconstructions/reconstruction.tif"
 
 config_dict["sample_length_unit"] = "mm"
@@ -68,21 +76,21 @@ config_dict["scanner_length_unit"] = "mm"
 
 config_dict["energy_unit"] = "keV"
 
-config_dict["detector_pixel_size"] = 0.03375*2
+config_dict["detector_pixel_size"] = 0.03375 * 4
 
-config_dict['distance_source_origin'] = 60
+config_dict["distance_source_origin"] = 60
 
-config_dict['distance_origin_detector'] = 80
+config_dict["distance_origin_detector"] = 80
 
-config_dict['detector_rows'] = 2048//2
+config_dict["detector_rows"] = 2048 // 4
 
-config_dict['detector_columns'] = 2048//2
+config_dict["detector_columns"] = 2048 // 4
 
-config_dict['x_ray_energies'] = [80]
+config_dict["x_ray_energies"] = [80]
 
-config_dict['x_ray_counts'] = [100]
+config_dict["x_ray_counts"] = [100]
 
-config_dict['number_of_projections'] = 100
+config_dict["number_of_projections"] = 1000
 
 config_dict["scanning_angle"] = 360
 
@@ -93,7 +101,7 @@ config_dict["display"] = True
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 ################################################################################
 
-#generate_unit_cell(config_dict)
+# generate_unit_cell(config_dict)
 
 sinograms = generate_sinograms(config_dict)
 reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)

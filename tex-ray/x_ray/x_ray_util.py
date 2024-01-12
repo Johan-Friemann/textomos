@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 from gvxrPython3 import gvxr
 
 """
@@ -137,28 +138,76 @@ def set_up_sample(
     matrix_elements,
     matrix_ratios,
     matrix_density,
+    rot_axis,
+    tiling,
+    offset,
+    tilt,
     length_unit="m",
 ):
     """Load yarn (weft and warp) and matrix geometries and X-Ray absorption
        properties.
 
     Args:
-        weft_geometry_path (string): The absolute path (including file name) to
-                                     the weft geometry mesh file.
+        weft_path (string): The absolute path (including file name) to
+                            the weft geometry mesh file.
+
         weft_elements (list(int)): The element numbers of the constituents of
                                    the weft material.
+
         weft_ratios (list(float)): The relative amount of the constituent
                                     elements of the weft material.
+
         weft_density (float): The density of the weft material in g/cm^3.
-        warp_geometry_path (string): The absolute path (including file name) to
-                                     the warp geometry mesh file.
+
+        warp_path (string): The absolute path (including file name) to
+                            the warp geometry mesh file.
+
         warp_elements (list(int)): The element numbers of the constituents of
                                    the warp material.
+
         warp_ratios (list(float)): The relative amount of the constituent
                                    elements of the warp material.
-        warp_density (float): The density of the warp material in g/cm^3.
-    """
 
+        warp_density (float): The density of the warp material in g/cm^3.
+
+        matrix_path (string): The absolute path (including file name) to
+                              the matrix geometry mesh file.
+
+        matrix_elements (list(int)): The element numbers of the constituents of
+                                     the matrix material.
+
+        matrix_ratios (list(float)): The relative amount of the constituent
+                                     elements of the matrix material.
+
+        matrix_density (float): The density of the matrix material in g/cm^3.
+
+        rot_axis (str): An axis given in the sample's local coordinate fram.
+                        The tomographic scan is performed around this axis,
+                        i.e the axis that should point upwards in the global
+                        coordinates. It can be "x", "y", or "z".
+
+        tiling (list[int]): A list of length 3 that represents the tiling
+                            pattern in the sample's local coordinates. Ex:
+                            [2,3,3] will tile two cells in x and 3 in y and z.
+                            [1,1,1] will result in no tiling (original sample).
+
+        offset (list[float]): A list of length 3 that represent the sample
+                              offset in global coordinates, measured from the
+                              center of the sample (center of tiling).
+                              [0,0,0] results in no offset.
+
+        tilt (list[float]): A list of length 3 that represents a rotation.
+                            The magnitude of the vector is the angle and the
+                            direction is the axis of rotation. It is given in
+                            degrees. [0,0,0] results in no tilt.
+
+    Keyword args:
+        length_unit (string): The unit of length measurement (m, cm, mm, um).
+                              Default unit is m (meter).
+
+    Returns:
+        -
+    """
     if len(weft_elements) != len(weft_ratios):
         raise ValueError(
             "Bad arguments: number of weft ratios must agree "
@@ -167,11 +216,6 @@ def set_up_sample(
 
     if sum(weft_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of weft ratios must be 1.0.")
-
-    gvxr.loadMeshFile("weft", weft_path, length_unit)
-    gvxr.setMixture("weft", weft_elements, weft_ratios)
-    gvxr.setDensity("weft", weft_density, "g/cm3")
-    gvxr.moveToCentre("weft")
 
     if len(warp_elements) != len(warp_ratios):
         raise ValueError(
@@ -182,11 +226,6 @@ def set_up_sample(
     if sum(warp_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of warp ratios must be 1.0.")
 
-    gvxr.loadMeshFile("warp", warp_path, length_unit)
-    gvxr.setMixture("warp", warp_elements, weft_ratios)
-    gvxr.setDensity("warp", warp_density, "g/cm3")
-    gvxr.moveToCentre("warp")
-
     if len(matrix_elements) != len(matrix_ratios):
         raise ValueError(
             "Bad arguments: number of matrix ratios must agree "
@@ -196,11 +235,134 @@ def set_up_sample(
     if sum(matrix_ratios) != 1.0:
         raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
 
-    gvxr.loadMeshFile("matrix", matrix_path, length_unit, False)  # Not inner
-    gvxr.addPolygonMeshAsOuterSurface("matrix")
-    gvxr.setMixture("matrix", matrix_elements, matrix_ratios)
-    gvxr.setDensity("matrix", matrix_density, "g/cm3")
-    gvxr.moveToCentre("matrix")
+    if rot_axis not in ["x", "y", "z"]:
+        raise ValueError(
+            "Bad arguments: Rotation axis must be 'x', 'y', or 'z'."
+        )
+
+    if len(offset) != 3:
+        raise ValueError(
+            "Bad arguments: offset should contain x, y, and z components."
+        )
+
+    if len(tilt) != 3:
+        raise ValueError(
+            "Bad arguments: tilt should contain x, y, and z components."
+        )
+    
+    if len(tiling) != 3:
+        raise ValueError(
+            "Bad arguments: tiling should contain x, y, and z components."
+        )
+    
+    # cast to numpy
+    tilt = np.array(tilt)
+    offset = np.array(offset)
+
+    if rot_axis == "x":
+        axis = np.array([0, -1, 0])
+        angle = 90
+    elif rot_axis == "y":
+        axis = np.array([1, 0, 0])
+        angle = 90
+    else:
+        # z is already up, so we just use this to not have to split by case.
+        axis = np.array([0, 0, 1])
+        angle = 0
+
+    # gvxr rotates the local coords, so we need to map the tilt and offset
+    # accordingly to apply them in the global system.
+    rot_tilt = R.from_rotvec(-tilt * np.pi / 180)
+    rot = R.from_rotvec(-angle * axis * np.pi / 180)
+    tilt_angle = np.linalg.norm(tilt)
+    tilt_axis = rot.apply(tilt / tilt_angle)
+    offset = rot.apply(rot_tilt.apply(offset))
+
+    # Turn inputs into lists for use in zipped loops.
+    root_names = ["matrix_000", "weft_000", "warp_000"]
+    paths = [matrix_path, weft_path, warp_path]
+    elements = [matrix_elements, weft_elements, warp_elements]
+    ratios = [matrix_ratios, weft_ratios, warp_ratios]
+    densities = [matrix_density, weft_density, warp_density]
+    tile_size = [0, 0, 0]
+
+    # We load files for the first occurences here in order to load only once.
+    for root_name, path, element, ratio, density in zip(
+        root_names, paths, elements, ratios, densities
+    ):
+        gvxr.loadMeshFile(root_name, path, length_unit, True)
+        gvxr.setMixture(root_name, element, ratio)
+        gvxr.setDensity(root_name, density, "g/cm3")
+        # We need to align the tiling to the matrix bounding box.
+        if root_name == "matrix_000":
+            bbox = gvxr.getNodeOnlyBoundingBox(root_name, length_unit)
+            tile_size[0] = bbox[3] - bbox[0]
+            tile_size[1] = bbox[4] - bbox[1]
+            tile_size[2] = bbox[5] - bbox[2]
+        # We must rotate before we translate since the translation
+        # does not translate the axis of rotation.
+        gvxr.rotateNode(root_name, angle, axis[0], axis[1], axis[2])
+        # results in crazy behavior in gvxr if 0.
+        if np.all(tilt):
+            gvxr.rotateNode(
+                root_name,
+                tilt_angle,
+                tilt_axis[0],
+                tilt_axis[1],
+                tilt_axis[2],
+            )
+        gvxr.translateNode(
+            root_name,
+            -tile_size[0] * (tiling[0] - 1) / 2 + offset[0],
+            -tile_size[1] * (tiling[1] - 1) / 2 + offset[1],
+            -tile_size[2] * (tiling[2] - 1) / 2 + offset[2],
+            length_unit,
+        )
+
+    # Once mesh files are loaded we can keep re-using them for the tiling.
+    for i in range(tiling[0]):
+        for j in range(tiling[1]):
+            for k in range(tiling[2]):
+                # This is a hack so we skip the first one.
+                if i == 0 and j == 0 and k == 0:
+                    continue
+                names = [
+                    "matrix_" + str(i) + str(j) + str(k),
+                    "weft_" + str(i) + str(j) + str(k),
+                    "warp_" + str(i) + str(j) + str(k),
+                ]
+
+                for name, root_name, element, ratio, density in zip(
+                    names, root_names, elements, ratios, densities
+                ):
+                    gvxr.emptyMesh(name)
+                    gvxr.addMesh(name, root_name)
+                    gvxr.addPolygonMeshAsInnerSurface(name)
+                    gvxr.setMixture(name, element, ratio)
+                    gvxr.setDensity(name, density, "g/cm3")
+                    gvxr.rotateNode(
+                        name,
+                        angle,
+                        axis[0],
+                        axis[1],
+                        axis[2],
+                    )
+                    # results in crazy behavior in gvxr if 0.
+                    if np.all(tilt):
+                        gvxr.rotateNode(
+                            name,
+                            tilt_angle,
+                            tilt_axis[0],
+                            tilt_axis[1],
+                            tilt_axis[2],
+                        )
+                    gvxr.translateNode(
+                        name,
+                        tile_size[0] * (i - (tiling[0] - 1) / 2) + offset[0],
+                        tile_size[1] * (j - (tiling[1] - 1) / 2) + offset[1],
+                        tile_size[2] * (k - (tiling[2] - 1) / 2) + offset[2],
+                        length_unit,
+                    )
 
 
 def perform_tomographic_scan(
