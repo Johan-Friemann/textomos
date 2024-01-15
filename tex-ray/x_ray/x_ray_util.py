@@ -303,7 +303,7 @@ def set_up_sample(
         # does not translate the axis of rotation.
         gvxr.rotateNode(root_name, angle, axis[0], axis[1], axis[2])
         # results in crazy behavior in gvxr if 0.
-        if np.all(tilt):
+        if np.any(tilt):
             gvxr.rotateNode(
                 root_name,
                 tilt_angle,
@@ -348,7 +348,7 @@ def set_up_sample(
                         axis[2],
                     )
                     # results in crazy behavior in gvxr if 0.
-                    if np.all(tilt):
+                    if np.any(tilt):
                         gvxr.rotateNode(
                             name,
                             tilt_angle,
