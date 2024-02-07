@@ -383,6 +383,8 @@ def add_photonic_noise(noise_free_projection, integrate_energy=True):
     """
     if integrate_energy:
         expected_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
+        # This returns the energy in MeV, but that is fine since the output
+        # of gvxr.computeXRayImage(True) returns the image in MeV.
         expected_energy = gvxr.getTotalEnergyWithDetectorResponse()
         scale_factor = expected_photon_count / expected_energy
         photonic_projection = noise_free_projection * scale_factor
@@ -444,7 +446,9 @@ def perform_tomographic_scan(
     return raw_projections
 
 
-def measure_flat_field(integrate_energy=True):
+def measure_flat_field(
+    integrate_energy=True, photonic_noise=True, num_reference=10
+):
     """Measure the flat field, i.e what the detector sees when the X-Ray source
        is on but there is no sample present. Can measure the energy fluence flat
        field, or the photon count flat field.
@@ -455,6 +459,10 @@ def measure_flat_field(integrate_energy=True):
     Keyword args:
         integrate_energy (bool): If true the energy fluence is measured by the
                           detector. Photon count is measured if false.
+        photonic_noise (bool): If true photonic noise is added to flat field.
+        num_reference (int): The number of reference images taken (and averaged)
+                             to generate the flat field. Small number can result
+                             in ring artefacts forming.
 
     Returns:
         flat_field_image(numpy array[float]): A numpy array containing the flat
@@ -465,20 +473,27 @@ def measure_flat_field(integrate_energy=True):
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
 
-    energy_bins = gvxr.getEnergyBins("MeV")
-    photon_count_per_bin = gvxr.getPhotonCountEnergyBins()
+    # This returns the energy in MeV, but that is fine since the output
+    # of gvxr.computeXRayImage(True) returns the image in MeV.
+    total_energy = gvxr.getTotalEnergyWithDetectorResponse()
+    total_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
 
-    # If not measuring the energy fluence, set energy bins to 1 [arb units] in
-    # order to return the total number of photons instead of total energy.
+    # If not measuring the energy fluence, set energy to photon count to prevent
+    # repeating code.
     if not integrate_energy:
-        energy_bins = [1 for _ in range(len(energy_bins))]
+        total_energy = total_photon_count
 
-    total_energy = 0.0
-    for energy, count in zip(energy_bins, photon_count_per_bin):
-        total_energy += energy * count
     flat_field_image *= total_energy
-
-    return flat_field_image
+    noisy_image = np.zeros(flat_field_image.shape)
+    if photonic_noise:
+        for i in range(num_reference):
+            noisy_image += add_photonic_noise(
+                flat_field_image, integrate_energy=integrate_energy
+            )
+    else:
+        noisy_image = flat_field_image * num_reference
+    noisy_image /= num_reference
+    return noisy_image
 
 
 def measure_dark_field(integrate_energy=True):

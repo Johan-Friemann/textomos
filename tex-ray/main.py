@@ -100,6 +100,8 @@ config_dict["display"] = True
 
 config_dict["photonic_noise"] = True
 
+config_dict["num_reference"] = 20
+
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 ################################################################################
 
