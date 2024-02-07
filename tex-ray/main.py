@@ -88,7 +88,7 @@ config_dict["detector_columns"] = 2048 // 4
 
 config_dict["x_ray_energies"] = [80]
 
-config_dict["x_ray_counts"] = [100]
+config_dict["x_ray_counts"] = [2e4]
 
 config_dict["number_of_projections"] = 1000
 
@@ -97,6 +97,8 @@ config_dict["scanning_angle"] = 360
 config_dict["threshold"] = 0.000000001
 
 config_dict["display"] = True
+
+config_dict["photonic_noise"] = True
 
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 ################################################################################

@@ -64,6 +64,7 @@ def generate_sinograms(config_dict):
         config_dict["number_of_projections"],
         config_dict["scanning_angle"],
         display=config_dict["display"],
+        photonic_noise=config_dict["photonic_noise"]
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()
