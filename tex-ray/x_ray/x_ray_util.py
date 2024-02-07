@@ -249,12 +249,12 @@ def set_up_sample(
         raise ValueError(
             "Bad arguments: tilt should contain x, y, and z components."
         )
-    
+
     if len(tiling) != 3:
         raise ValueError(
             "Bad arguments: tiling should contain x, y, and z components."
         )
-    
+
     # cast to numpy
     tilt = np.array(tilt)
     offset = np.array(offset)
@@ -365,8 +365,44 @@ def set_up_sample(
                     )
 
 
+def add_photonic_noise(noise_free_projection, integrate_energy=True):
+    """Add Poisson distributed photonic noise (shot noise) to the projection.
+
+    Args:
+        noise_free_projection numpy array[float]): A noise-free projection.
+
+    Keyword args:
+        integrate_energy (bool): If true the measured energy is rescaled to
+                                 approximated number of photons counted before
+                                 adding the noise. After the noise is added
+                                 the resulting projection is scaled back to the
+                                 energy domain.
+
+    Returns:
+        noisy_projection (numpy array[float]): A noisy projection.
+    """
+    if integrate_energy:
+        expected_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
+        # This returns the energy in MeV, but that is fine since the output
+        # of gvxr.computeXRayImage(True) returns the image in MeV.
+        expected_energy = gvxr.getTotalEnergyWithDetectorResponse()
+        scale_factor = expected_photon_count / expected_energy
+        photonic_projection = noise_free_projection * scale_factor
+    else:
+        photonic_projection = noise_free_projection
+        scale_factor = 1.0
+
+    noisy_projection = np.random.poisson(photonic_projection)
+
+    return noisy_projection / scale_factor
+
+
 def perform_tomographic_scan(
-    num_projections, scanning_angle, display=False, integrate_energy=True
+    num_projections,
+    scanning_angle,
+    display=False,
+    integrate_energy=True,
+    photonic_noise=True,
 ):
     """Perform a tomographic scan consisting of a certain number of projections
        and sweeping a certain angle. The scan rotates the sample clockwise
@@ -380,6 +416,7 @@ def perform_tomographic_scan(
         display (bool): Will display the scanning scene if true.
         integrate_energy (bool): If true the energy fluence is measured by the
                                  detector. Photon count is measured if false.
+        photonic_noise (bool): If true photonic noise is added to projections.
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
@@ -395,10 +432,10 @@ def perform_tomographic_scan(
     angular_step = scanning_angle / num_projections
     for angle_id in range(0, num_projections):
         # Compute an X-ray image and add it to the set of projections.
-        raw_projections[angle_id] = np.array(
-            gvxr.computeXRayImage(integrate_energy)
-        )
-
+        raw_projection = np.array(gvxr.computeXRayImage(integrate_energy))
+        if photonic_noise:
+            raw_projection = add_photonic_noise(raw_projection)
+        raw_projections[angle_id] = raw_projection
         # Update the rendering if display.
         if display:
             gvxr.displayScene()
@@ -409,7 +446,9 @@ def perform_tomographic_scan(
     return raw_projections
 
 
-def measure_flat_field(integrate_energy=True):
+def measure_flat_field(
+    integrate_energy=True, photonic_noise=True, num_reference=10
+):
     """Measure the flat field, i.e what the detector sees when the X-Ray source
        is on but there is no sample present. Can measure the energy fluence flat
        field, or the photon count flat field.
@@ -420,6 +459,10 @@ def measure_flat_field(integrate_energy=True):
     Keyword args:
         integrate_energy (bool): If true the energy fluence is measured by the
                           detector. Photon count is measured if false.
+        photonic_noise (bool): If true photonic noise is added to flat field.
+        num_reference (int): The number of reference images taken (and averaged)
+                             to generate the flat field. Small number can result
+                             in ring artefacts forming.
 
     Returns:
         flat_field_image(numpy array[float]): A numpy array containing the flat
@@ -430,20 +473,27 @@ def measure_flat_field(integrate_energy=True):
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
 
-    energy_bins = gvxr.getEnergyBins("MeV")
-    photon_count_per_bin = gvxr.getPhotonCountEnergyBins()
+    # This returns the energy in MeV, but that is fine since the output
+    # of gvxr.computeXRayImage(True) returns the image in MeV.
+    total_energy = gvxr.getTotalEnergyWithDetectorResponse()
+    total_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
 
-    # If not measuring the energy fluence, set energy bins to 1 [arb units] in
-    # order to return the total number of photons instead of total energy.
+    # If not measuring the energy fluence, set energy to photon count to prevent
+    # repeating code.
     if not integrate_energy:
-        energy_bins = [1 for _ in range(len(energy_bins))]
+        total_energy = total_photon_count
 
-    total_energy = 0.0
-    for energy, count in zip(energy_bins, photon_count_per_bin):
-        total_energy += energy * count
     flat_field_image *= total_energy
-
-    return flat_field_image
+    noisy_image = np.zeros(flat_field_image.shape)
+    if photonic_noise:
+        for i in range(num_reference):
+            noisy_image += add_photonic_noise(
+                flat_field_image, integrate_energy=integrate_energy
+            )
+    else:
+        noisy_image = flat_field_image * num_reference
+    noisy_image /= num_reference
+    return noisy_image
 
 
 def measure_dark_field(integrate_energy=True):
