@@ -64,11 +64,15 @@ def generate_sinograms(config_dict):
         config_dict["number_of_projections"],
         config_dict["scanning_angle"],
         display=config_dict["display"],
+        photonic_noise=config_dict["photonic_noise"],
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()
 
-    flat_field_image = measure_flat_field()
+    flat_field_image = measure_flat_field(
+        photonic_noise=config_dict["photonic_noise"],
+        num_reference=config_dict["num_reference"]
+    )
     dark_field_image = measure_dark_field()
     corrected_projections = perform_flat_field_correction(
         raw_projections, flat_field_image, dark_field_image
