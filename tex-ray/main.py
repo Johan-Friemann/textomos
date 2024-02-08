@@ -76,19 +76,19 @@ config_dict["scanner_length_unit"] = "mm"
 
 config_dict["energy_unit"] = "keV"
 
-config_dict["detector_pixel_size"] = 0.03375 * 4
+config_dict["detector_pixel_size"] = 0.03375
 
 config_dict["distance_source_origin"] = 60
 
 config_dict["distance_origin_detector"] = 80
 
-config_dict["detector_rows"] = 2048 // 4
+config_dict["detector_rows"] = 2048
 
-config_dict["detector_columns"] = 2048 // 4
+config_dict["detector_columns"] = 2048
 
 config_dict["x_ray_energies"] = [80]
 
-config_dict["x_ray_counts"] = [2e4]
+config_dict["x_ray_counts"] = [4*2e4]
 
 config_dict["number_of_projections"] = 1000
 
@@ -99,6 +99,8 @@ config_dict["threshold"] = 0.000000001
 config_dict["display"] = True
 
 config_dict["photonic_noise"] = True
+
+config_dict["binning"] = 4
 
 config_dict["num_reference"] = 20
 
