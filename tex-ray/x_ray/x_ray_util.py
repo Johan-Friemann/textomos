@@ -26,6 +26,7 @@ def set_up_detector(
     detector_columns,
     detector_rows,
     detector_pixel_size,
+    binning=1,
     length_unit="m",
 ):
     """Set up the gVirtualXRay detector. Note that the reconstruction volume is
@@ -42,17 +43,29 @@ def set_up_detector(
         detector_pixel_size (float): The side length of the detector pixels.
 
     Keyword args:
+        binning (int): The binning number. It defines the side length of the
+                       square of pixels to average over. Must be  a divisor of
+                       both the detector rows and the detector columns.
         length_unit (string): The unit of length measurement (m, cm, mm, um).
                               Default unit is m (meter).
 
     Returns:
         -
     """
+    if detector_rows % binning != 0.0 or detector_columns % binning != 0.0:
+        raise ValueError(
+            "Bad arguments: binning must be a divisor of both the dector "
+            + "rows and the detector columns."
+        )
     gvxr.setDetectorUpVector(0, 0, 1)
     gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, length_unit)
-    gvxr.setDetectorNumberOfPixels(detector_columns, detector_rows)
+    gvxr.setDetectorNumberOfPixels(
+        detector_columns // binning, detector_rows // binning
+    )
     gvxr.setDetectorPixelSize(
-        detector_pixel_size, detector_pixel_size, length_unit
+        detector_pixel_size * binning,
+        detector_pixel_size * binning,
+        length_unit,
     )
 
 
@@ -424,6 +437,9 @@ def perform_tomographic_scan(
                                               shape (num_projections,
                                               detector_rows, detector_columns).
     """
+    # No need to correct for binning since it is taken care of during set-up.
+    # We do not need to account for binning in the noise since a sum of 
+    # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     raw_projections = np.empty(
         (num_projections, detector_rows, detector_columns)
@@ -470,6 +486,9 @@ def measure_flat_field(
                                               (detector_rows, detector_columns).
 
     """
+    # No need to correct for binning since it is taken care of during set-up.
+    # We do not need to account for binning in the noise since a sum of 
+    # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
 
@@ -514,6 +533,7 @@ def measure_dark_field(integrate_energy=True):
                                               (detector_rows, detector_columns).
 
     """
+    # No need to correct for binning since it is taken care of during set-up.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     dark_field_image = np.zeros((detector_rows, detector_columns))
 
