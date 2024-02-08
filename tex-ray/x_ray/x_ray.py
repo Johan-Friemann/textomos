@@ -30,6 +30,7 @@ def generate_sinograms(config_dict):
         config_dict["detector_columns"],
         config_dict["detector_rows"],
         config_dict["detector_pixel_size"],
+        binning=config_dict["binning"],
         length_unit=config_dict["scanner_length_unit"],
     )
 
@@ -110,7 +111,8 @@ def perform_tomographic_reconstruction(
                                              detector_columns, detector_columns)
 
     """
-
+    # IMPORTANT: Since we scale everything by the binning parameter when we set
+    # up our simulation, we must also scale by the binning parameter here!
     projection_angles = np.linspace(
         0,
         np.deg2rad(config_dict["scanning_angle"]),
@@ -120,21 +122,25 @@ def perform_tomographic_reconstruction(
     scale_factor = compute_astra_scale_factor(
         config_dict["distance_source_origin"],
         config_dict["distance_origin_detector"],
-        config_dict["detector_pixel_size"],
+        config_dict["detector_pixel_size"] * config_dict["binning"],
     )
 
     vol_geo = astra.create_vol_geom(
-        config_dict["detector_columns"],
-        config_dict["detector_columns"],
-        config_dict["detector_rows"],
+        config_dict["detector_columns"] // config_dict["binning"],
+        config_dict["detector_columns"] // config_dict["binning"],
+        config_dict["detector_rows"] // config_dict["binning"],
     )
 
     proj_geo = astra.creators.create_proj_geom(
         "cone",
-        config_dict["detector_pixel_size"] * scale_factor,
-        config_dict["detector_pixel_size"] * scale_factor,
-        config_dict["detector_rows"],
-        config_dict["detector_columns"],
+        config_dict["detector_pixel_size"]
+        * config_dict["binning"]
+        * scale_factor,
+        config_dict["detector_pixel_size"]
+        * config_dict["binning"]
+        * scale_factor,
+        config_dict["detector_rows"] // config_dict["binning"],
+        config_dict["detector_columns"] // config_dict["binning"],
         projection_angles,
         config_dict["distance_source_origin"] * scale_factor,
         config_dict["distance_origin_detector"] * scale_factor,
@@ -152,14 +158,7 @@ def perform_tomographic_reconstruction(
     reconstruction[reconstruction < 0] = 0
 
     # Rescale to get attenuation coefficient in scanner_length_unit^-1.
-    reconstruction /= (
-        config_dict["detector_pixel_size"]
-        * config_dict["distance_source_origin"]
-        / (
-            config_dict["distance_source_origin"]
-            + config_dict["distance_origin_detector"]
-        )
-    )
+    reconstruction *= scale_factor 
 
     # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale from 1000.
     unit_scale = 1000 / gvxr.getUnitOfLength(config_dict["scanner_length_unit"])
