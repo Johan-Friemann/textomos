@@ -131,7 +131,7 @@ def generate_xray_spectrum(
     x = offset[0] * scale_factor * 100.0
     y = offset[1] * scale_factor * 100.0
     z = (distance_source_detector - offset[2]) * scale_factor * 100.0
-    detector_area = detector_pixel_size * scale_factor**2 * 100.0**2 # cm^2
+    detector_area = detector_pixel_size**2 * scale_factor**2 * 100.0**2 # cm^2
     # for filter thickness SpekPy uses mm length_unit --> m --> mm
     filter_d = filter_thickness * scale_factor * 1000.0
 
