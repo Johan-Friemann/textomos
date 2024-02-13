@@ -44,9 +44,9 @@ def generate_sinograms(config_dict):
         + config_dict["distance_origin_detector"],
         config_dict["offset"],
         config_dict["detector_pixel_size"],
-        filter_thickness=0.0,
-        filter_material="Al",
-        target_material="W",
+        filter_thickness=config_dict["filter_thickness"],
+        filter_material=config_dict["filter_material"],
+        target_material=config_dict["target_material"],
         length_unit=config_dict["scanner_length_unit"],
     )
 
