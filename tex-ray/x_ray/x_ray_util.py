@@ -79,10 +79,11 @@ def generate_xray_spectrum(
     distance_source_detector,
     offset,
     detector_pixel_size,
-    filter_thickness = 0.0,
-    filter_material = "Al",
+    binning=1,
+    filter_thickness=0.0,
+    filter_material="Al",
     target_material="W",
-    length_unit = "m"
+    length_unit="m",
 ):
     """Use SpekPy to generate an x-ray spectrum.
 
@@ -103,6 +104,9 @@ def generate_xray_spectrum(
                               [0,0,0] results in no offset.
         detector_pixel_size (float): The area of one detector pixel.
     Keyword args:
+        binning (int): The binning number. It defines the side length of the
+                       square of pixels to average over. Used to scale
+                       flux appropriately.
         filter_thickness (float): The thickness of the x-ray filter.
                                   Default is no filter (=0.0).
         filter_material (string): The chemical symbol of the filter material.
@@ -113,7 +117,7 @@ def generate_xray_spectrum(
                               Default unit is m (meter).
     Returns:
         (energy_bins, photon_flux) (numpy array[float]): Returns a tuple of the
-                                                         energy bins, and the 
+                                                         energy bins, and the
                                                          photon flux per
                                                          detector pixel.
     """
@@ -131,26 +135,30 @@ def generate_xray_spectrum(
     x = offset[0] * scale_factor * 100.0
     y = offset[1] * scale_factor * 100.0
     z = (distance_source_detector - offset[2]) * scale_factor * 100.0
-    detector_area = detector_pixel_size**2 * scale_factor**2 * 100.0**2 # cm^2
+    detector_area = (
+        detector_pixel_size**2 * binning**2 * scale_factor**2 * 100.0**2
+    )  # cm^2
+
     # for filter thickness SpekPy uses mm length_unit --> m --> mm
     filter_d = filter_thickness * scale_factor * 1000.0
 
-    # NEED TO RECALCULATE THE FLUX TO ACCOUNT FOR PIXEL SIZE (INCL BINNING)
     tube_current = tube_power / tube_voltage
     charge = tube_current * exposure_time
+
     spectrum = sp.Spek(
         kvp=tube_voltage,
         th=anode_angle,
         dk=energy_bin_width,
         mas=charge,
         targ=target_material,
-        x = x,
-        y = y,
-        z = z
+        x=x,
+        y=y,
+        z=z,
     ).filter(filter_material, filter_d)
     bins, flux_per_area = spectrum.get_spectrum(diff=False)
     # diff=False: photons / cm^2 / bin
-    return bins, flux_per_area*detector_area
+    return bins, flux_per_area * detector_area
+
 
 def set_up_xray_source(
     distance_source_origin,
