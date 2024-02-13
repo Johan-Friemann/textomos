@@ -34,11 +34,28 @@ def generate_sinograms(config_dict):
         length_unit=config_dict["scanner_length_unit"],
     )
 
+    energy_bins, photon_flux = generate_xray_spectrum(
+        config_dict["anode_angle"],
+        config_dict["energy_bin_width"],
+        config_dict["tube_voltage"],
+        config_dict["tube_power"],
+        config_dict["exposure_time"],
+        config_dict["distance_source_origin"]
+        + config_dict["distance_origin_detector"],
+        config_dict["offset"],
+        config_dict["detector_pixel_size"],
+        binning=config_dict["binning"],
+        filter_thickness=config_dict["filter_thickness"],
+        filter_material=config_dict["filter_material"],
+        target_material=config_dict["target_material"],
+        length_unit=config_dict["scanner_length_unit"],
+    )
+
     set_up_xray_source(
         config_dict["distance_source_origin"],
         -1,
-        config_dict["x_ray_energies"],
-        config_dict["x_ray_counts"],
+        energy_bins,
+        photon_flux,
         length_unit=config_dict["scanner_length_unit"],
         energy_unit=config_dict["energy_unit"],
     )
@@ -72,7 +89,7 @@ def generate_sinograms(config_dict):
 
     flat_field_image = measure_flat_field(
         photonic_noise=config_dict["photonic_noise"],
-        num_reference=config_dict["num_reference"]
+        num_reference=config_dict["num_reference"],
     )
     dark_field_image = measure_dark_field()
     corrected_projections = perform_flat_field_correction(
@@ -158,7 +175,7 @@ def perform_tomographic_reconstruction(
     reconstruction[reconstruction < 0] = 0
 
     # Rescale to get attenuation coefficient in scanner_length_unit^-1.
-    reconstruction *= scale_factor 
+    reconstruction *= scale_factor
 
     # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale from 1000.
     unit_scale = 1000 / gvxr.getUnitOfLength(config_dict["scanner_length_unit"])

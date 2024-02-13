@@ -76,7 +76,8 @@ config_dict["scanner_length_unit"] = "mm"
 
 config_dict["energy_unit"] = "keV"
 
-config_dict["detector_pixel_size"] = 0.03375
+# 13.5 um --> 0.0135 mm --> (LFOV) --> effective 0.0375 mm
+config_dict["detector_pixel_size"] = 13.5 / 0.4 / 1000.0
 
 config_dict["distance_source_origin"] = 60
 
@@ -86,11 +87,7 @@ config_dict["detector_rows"] = 2048
 
 config_dict["detector_columns"] = 2048
 
-config_dict["x_ray_energies"] = [80]
-
-config_dict["x_ray_counts"] = [4*2e4]
-
-config_dict["number_of_projections"] = 1000
+config_dict["number_of_projections"] = 800
 
 config_dict["scanning_angle"] = 360
 
@@ -100,7 +97,23 @@ config_dict["display"] = True
 
 config_dict["photonic_noise"] = True
 
-config_dict["binning"] = 4
+config_dict["binning"] = 2
+
+config_dict["anode_angle"] = 12
+
+config_dict["tube_voltage"] = 40
+
+config_dict["tube_power"] = 10
+
+config_dict["filter_thickness"] = 1.0
+
+config_dict["filter_material"] = "Al"
+
+config_dict["target_material"] = "W"
+
+config_dict["exposure_time"] = 5
+
+config_dict["energy_bin_width"] = 0.5
 
 config_dict["num_reference"] = 20
 

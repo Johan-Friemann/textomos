@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import spekpy as sp
 from gvxrPython3 import gvxr
 
 """
@@ -67,6 +68,96 @@ def set_up_detector(
         detector_pixel_size * binning,
         length_unit,
     )
+
+
+def generate_xray_spectrum(
+    anode_angle,
+    energy_bin_width,
+    tube_voltage,
+    tube_power,
+    exposure_time,
+    distance_source_detector,
+    offset,
+    detector_pixel_size,
+    binning=1,
+    filter_thickness=0.0,
+    filter_material="Al",
+    target_material="W",
+    length_unit="m",
+):
+    """Use SpekPy to generate an x-ray spectrum.
+
+    Args:
+        anode_angle (float): The effective x-ray tube anode angle given
+                             in degrees.
+        energy_bin_width (float): The width of the spectrum energy bins given
+                                  in kilovolts (kV).
+        tube_voltage (float): The voltage of the x-ray tube given in kilovolts
+                              (kV).
+        tube_power (float): The electrical power of the x-ray tube given in
+                            watts (W).
+        exposure_time (float): The x-ray exposure time given in seconds (s).
+        distance_source_detector: The distance from x-ray source to detector.
+        offset (list[float]): A list of length 3 that represent the sample
+                              offset in global coordinates, measured from the
+                              center of the sample (center of tiling).
+                              [0,0,0] results in no offset.
+        detector_pixel_size (float): The area of one detector pixel.
+    Keyword args:
+        binning (int): The binning number. It defines the side length of the
+                       square of pixels to average over. Used to scale
+                       flux appropriately.
+        filter_thickness (float): The thickness of the x-ray filter.
+                                  Default is no filter (=0.0).
+        filter_material (string): The chemical symbol of the filter material.
+                                  See SpekPy docs. Default is aluminium.
+        target_material (string): The chemical symbol of the target material.
+                                  See SpekPy docs. Default is tungsten.
+        length_unit (string): The unit of length measurement (m, cm, mm).
+                              Default unit is m (meter).
+    Returns:
+        (energy_bins, photon_flux) (numpy array[float]): Returns a tuple of the
+                                                         energy bins, and the
+                                                         photon flux per
+                                                         detector pixel.
+    """
+    if length_unit == "mm":
+        scale_factor = 1e-3
+    elif length_unit == "cm":
+        scale_factor = 1e-2
+    elif length_unit == "m":
+        scale_factor = 1.0
+    else:
+        raise ValueError(
+            "Bad arguments: length_unit must be 'm', 'cm', or 'mm'."
+        )
+    # Spekpy uses cm as unit, so we must convert. length_unit --> m --> cm
+    x = offset[0] * scale_factor * 100.0
+    y = offset[1] * scale_factor * 100.0
+    z = (distance_source_detector - offset[2]) * scale_factor * 100.0
+    detector_area = (
+        detector_pixel_size**2 * binning**2 * scale_factor**2 * 100.0**2
+    )  # cm^2
+
+    # for filter thickness SpekPy uses mm length_unit --> m --> mm
+    filter_d = filter_thickness * scale_factor * 1000.0
+
+    tube_current = tube_power / tube_voltage
+    charge = tube_current * exposure_time
+
+    spectrum = sp.Spek(
+        kvp=tube_voltage,
+        th=anode_angle,
+        dk=energy_bin_width,
+        mas=charge,
+        targ=target_material,
+        x=x,
+        y=y,
+        z=z,
+    ).filter(filter_material, filter_d)
+    bins, flux_per_area = spectrum.get_spectrum(diff=False)
+    # diff=False: photons / cm^2 / bin
+    return bins, flux_per_area * detector_area
 
 
 def set_up_xray_source(
@@ -438,7 +529,7 @@ def perform_tomographic_scan(
                                               detector_rows, detector_columns).
     """
     # No need to correct for binning since it is taken care of during set-up.
-    # We do not need to account for binning in the noise since a sum of 
+    # We do not need to account for binning in the noise since a sum of
     # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     raw_projections = np.empty(
@@ -487,7 +578,7 @@ def measure_flat_field(
 
     """
     # No need to correct for binning since it is taken care of during set-up.
-    # We do not need to account for binning in the noise since a sum of 
+    # We do not need to account for binning in the noise since a sum of
     # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
