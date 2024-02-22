@@ -1,6 +1,7 @@
 import tifffile
 from x_ray.x_ray import *
 from textile_generation.textile_generation import *
+from import_scanner_data.zeiss_xradia_410_versa import *
 
 ################################################################################
 config_dict = {}
@@ -87,7 +88,7 @@ config_dict["detector_rows"] = 2048
 
 config_dict["detector_columns"] = 2048
 
-config_dict["number_of_projections"] = 800
+config_dict["number_of_projections"] = 801
 
 config_dict["scanning_angle"] = 360
 
@@ -105,7 +106,7 @@ config_dict["tube_voltage"] = 40
 
 config_dict["tube_power"] = 10
 
-config_dict["filter_thickness"] = 1.0
+config_dict["filter_thickness"] = 2.0
 
 config_dict["filter_material"] = "Al"
 
@@ -118,6 +119,8 @@ config_dict["energy_bin_width"] = 0.5
 config_dict["num_reference"] = 20
 
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
+
+config_dict["sample_rotation_direction"] = -1 # Typically 1 for sim, and -1 for real scan
 ################################################################################
 
 # generate_unit_cell(config_dict)
