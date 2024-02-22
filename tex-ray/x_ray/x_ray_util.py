@@ -699,6 +699,10 @@ def neg_log_transform(corrected_projections, threshold):
 
     neg_log_projections = -np.log(neg_log_projections)
 
+    # Take the threshold again in order to prevent negative values.
+    # This can occur if the noise happens to make I>I0.
+    neg_log_projections[neg_log_projections < threshold] = threshold
+
     return neg_log_projections
 
 

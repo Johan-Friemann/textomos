@@ -11,6 +11,8 @@ import numpy as np
 from olefile import isOleFile, OleFileIO
 import tifffile
 
+from x_ray.x_ray import neg_log_transform
+
 
 def read_txm_scan_data(in_path):
     """Read Zeiss txm file data.
@@ -60,6 +62,95 @@ def read_txm_scan_data(in_path):
         )
 
     ole.close()
+    return data_out
+
+
+def read_txrm_scan_data(
+    in_path, as_sino=False, neg_log=True, step=1, threshold=1e-6
+):
+    """Read Zeiss txrm file data and perform flat field correction.
+
+    Args:
+        in_path (str): The absolute path to the txm file.
+
+    Keyword args:
+        as_sino (bool): Will return sinograms instead of projections if true.
+        neg_log (bool): Will perform the negative log transform if true.
+        step (int): Will include every step:th projection.
+        threshold (double): The thresholding value for negative log transform.
+    Returns:
+        data_out (numpy array[numpy array[numpy array[int]]]):
+            Projections (or sinograms) as a numpy array.
+    """
+    if not isOleFile(in_path):
+        raise ValueError("%s is not an OLE file!" % (in_path))
+
+    ole = OleFileIO(in_path)
+
+    stream = ole.openstream("ImageInfo/ImageHeight")
+    buffer = stream.read()
+    stream.close()
+    image_height = np.frombuffer(buffer, np.uint32)[0]
+
+    stream = ole.openstream("ImageInfo/ImageWidth")
+    buffer = stream.read()
+    stream.close()
+    image_width = np.frombuffer(buffer, np.uint32)[0]
+
+    stream = ole.openstream("ImageInfo/ImagesTaken")
+    buffer = stream.read()
+    stream.close()
+    images_taken = np.frombuffer(buffer, np.uint32)[0]
+
+    stream = ole.openstream("Alignment/X-Shifts")
+    buffer = stream.read()
+    stream.close()
+    x_shifts = np.frombuffer(buffer, np.float32).astype(int)
+
+    stream = ole.openstream("Alignment/Y-Shifts")
+    buffer = stream.read()
+    stream.close()
+    y_shifts = np.frombuffer(buffer, np.float32).astype(int)
+
+    stream = ole.openstream("ReferenceData/Image")
+    buffer = stream.read()
+    stream.close()
+    reference = np.frombuffer(buffer, np.uint16)
+    reference_image = np.reshape(reference, (image_height, image_width))
+
+    num_images = images_taken // step + 1
+    data_out = np.ndarray(
+        (num_images, image_height, image_width), dtype=np.float32
+    )
+    # Images are stored as chunks of 100. ImageData1 contains
+    # Image1 to Image100, ImageData2 contains Image201 to Image300 and so on...
+    for image_id in range(1, images_taken + 1, step):
+        image_data_id = (image_id - 1) // 100 + 1
+        formatted_str = "ImageData%i/Image%i" % (image_data_id, image_id)
+
+        stream = ole.openstream(formatted_str)
+        buffer = stream.read()
+        stream.close()
+        image_data = np.frombuffer(buffer, np.uint16)
+        image = np.reshape(image_data, (image_height, image_width))
+        image = np.roll(
+            image,
+            (y_shifts[image_id - 1], x_shifts[image_id - 1]),
+            axis=(0, 1),
+        )
+        rolled_reference = np.roll(
+            reference_image,
+            (y_shifts[image_id - 1], x_shifts[image_id - 1]),
+            axis=(0, 1),
+        )
+        data_out[(image_id - 1) // step] = image / rolled_reference  # Flatfield
+
+    if neg_log:
+        data_out = neg_log_transform(data_out, threshold)
+
+    if as_sino:
+        data_out = np.swapaxes(data_out, 0, 1)
+
     return data_out
 
 
