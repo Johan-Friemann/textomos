@@ -130,7 +130,10 @@ def perform_tomographic_reconstruction(
     """
     # IMPORTANT: Since we scale everything by the binning parameter when we set
     # up our simulation, we must also scale by the binning parameter here!
-    projection_angles = np.linspace(
+
+    # ASTRA toolbox uses clockwise rotation as positive. If the scanner rotates
+    # counter clockwise, we need to add a negative sign here.
+    projection_angles = config_dict["sample_rotation_direction"]*np.linspace(
         0,
         np.deg2rad(config_dict["scanning_angle"]),
         config_dict["number_of_projections"],
