@@ -66,7 +66,7 @@ def read_txm_scan_data(in_path):
 
 
 def read_txrm_scan_data(
-    in_path, as_sino=False, neg_log=True, step=1, threshold=1e-6
+    in_path, as_sino=False, neg_log=True, step=1, binning=1, threshold=1e-6
 ):
     """Read Zeiss txrm file data and perform flat field correction.
 
@@ -77,6 +77,7 @@ def read_txrm_scan_data(
         as_sino (bool): Will return sinograms instead of projections if true.
         neg_log (bool): Will perform the negative log transform if true.
         step (int): Will include every step:th projection.
+        binning (int): Binning number, sum bin by bin pixels across projections.
         threshold (double): The thresholding value for negative log transform.
     Returns:
         data_out (numpy array[numpy array[numpy array[int]]]):
@@ -120,7 +121,8 @@ def read_txrm_scan_data(
 
     num_images = images_taken // step + 1
     data_out = np.ndarray(
-        (num_images, image_height, image_width), dtype=np.float32
+        (num_images, image_height // binning, image_width // binning),
+        dtype=np.float32,
     )
     # Images are stored as chunks of 100. ImageData1 contains
     # Image1 to Image100, ImageData2 contains Image201 to Image300 and so on...
@@ -133,17 +135,37 @@ def read_txrm_scan_data(
         stream.close()
         image_data = np.frombuffer(buffer, np.uint16)
         image = np.reshape(image_data, (image_height, image_width))
+        
+        # Can't bin ref outside loop because the x or y-shift might not be even.
+        # This is also why we have to bin after rolling the image.
         image = np.roll(
             image,
             (y_shifts[image_id - 1], x_shifts[image_id - 1]),
             axis=(0, 1),
+        )
+        image = (
+            image.reshape(
+                image_height // binning,
+                binning,
+                image_width // binning,
+                binning,
+            )
+            .sum(-1)
+            .sum(1)
         )
         rolled_reference = np.roll(
             reference_image,
             (y_shifts[image_id - 1], x_shifts[image_id - 1]),
             axis=(0, 1),
         )
-        data_out[(image_id - 1) // step] = image / rolled_reference  # Flatfield
+        rolled_reference = (
+        rolled_reference.reshape(
+            image_height // binning, binning, image_width // binning, binning
+        )
+        .sum(-1)
+        .sum(1)
+        )
+        data_out[(image_id - 1) // step] = image / rolled_reference
 
     if neg_log:
         data_out = neg_log_transform(data_out, threshold)
