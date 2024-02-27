@@ -1,5 +1,6 @@
 import pymeshlab as pml
 import numpy as np
+from numpy.random import rand
 from TexGen.Core import *
 
 
@@ -13,6 +14,7 @@ def create_layer2layer_unit_cell(
     spacing_ratio,
     weft_to_warp_ratio,
     weave_pattern,
+    deform
 ):
     """Generate a layer to layer fabric unit cell using TexGen.
 
@@ -46,6 +48,25 @@ def create_layer2layer_unit_cell(
             or -1 for "push down". A "push" will move all the warp yarns at the
             selected location either one layer up or down.
 
+        deform (list[float]): A list of length 12 that contains deformation
+                              parameters. Deformation will be applied randomly
+                              at each node. This is done by multiplying the
+                              parameter with a uniform random variable between
+                              -1 and 1 for translation and rotation, and 0 to 1
+                              for scaling. If an empty list is given no
+                              deformation is applied. The parameters are:
+                                    1: weft crossection x-scaling (%)
+                                    2: weft crossection y-scaling (%)
+                                    3: weft crossection rotation (degrees)
+                                    4: weft node x displacement (length units)
+                                    5: weft node y displacement (length units)
+                                    6: weft node z displacement (length units)
+                                    7: warp crossection x-scaling (%)
+                                    8: warp crossection y-scaling (%)
+                                    9: warp crossection rotation (degrees)
+                                    10: warp node x displacement (length units)
+                                    11: warp node y displacement (length units)
+                                    12: warp node z displacement (length units)
     Keyword args:
         -
 
@@ -54,10 +75,6 @@ def create_layer2layer_unit_cell(
 
         Warp (CTextile): A TexGen object that describes the warp yarns.
     """
-    squeeze = [0.1, 0.2, 0.1, 0.2]
-    twist = [0.1, 0.1]
-    peturb_yarns = True
-
     x_yarn_spacing = cell_y_size / num_weft
     y_yarn_spacing = cell_x_size / num_warp
     x_yarn_width = x_yarn_spacing * spacing_ratio
@@ -87,8 +104,6 @@ def create_layer2layer_unit_cell(
         if push[2] == -1:
             Textile.PushDown(push[0], push[1])
 
-    Textile.SetGapSize(1)
-
     Domain = Textile.GetDefaultDomain()
     Weft = CTextile()
     Weft.AssignDomain(Domain)
@@ -104,21 +119,22 @@ def create_layer2layer_unit_cell(
         else:
             idx = 1
 
-        if peturb_yarns:
+        if deform:
             Yarn.ConvertToInterpNodes()
             YarnSection = Yarn.GetYarnSection()
             InterpNode = YarnSection.GetSectionInterpNode()
             # In order to ensure continuity in the unit cell, first and last
-            # nodes must habe the same section. Thus assign outside the loop.
+            # nodes must have the same section. Thus assign outside the loop.
             first_section = CSectionRotated(
                 CSectionScaled(
                     InterpNode.GetNodeSection(0),
+                    # We only allow scaling down to not go outside bbox.
                     XY(
-                        1.0 + (2 * np.random.rand() - 1) * squeeze[2 * idx],
-                        1.0 + (2 * np.random.rand() - 1) * squeeze[2 * idx + 1],
+                        1.0 - rand() * deform[6 * idx] / 100.0,
+                        1.0 - rand() * deform[6 * idx + 1] / 100.0,
                     ),
                 ),
-                twist[idx] * (2 * np.random.rand() - 1),
+                np.deg2rad(deform[6 * idx + 2]) * (2 * rand() - 1),
             )
             for j in range(num_nodes):
                 if j == 0 or j == num_nodes - 1:
@@ -128,15 +144,22 @@ def create_layer2layer_unit_cell(
                     modified_section = CSectionRotated(
                         CSectionScaled(
                             original_section,
+                            # We only allow scaling down to not go outside bbox.
                             XY(
-                                1.0
-                                + (2 * np.random.rand() - 1) * squeeze[2 * idx],
-                                1.0
-                                + (2 * np.random.rand() - 1)
-                                * squeeze[2 * idx + 1],
+                                1.0 - rand() * deform[6 * idx] / 100.0,
+                                1.0 - rand() * deform[6 * idx + 1] / 100.0,
                             ),
                         ),
-                        twist[idx] * (2 * np.random.rand() - 1),
+                        np.deg2rad(deform[6 * idx + 2]) * (2 * rand() - 1),
+                    )
+                    # Only translate nodes that are not at the ends
+                    Node = Yarn.GetNode(j)
+                    Node.Translate(
+                        XYZ(
+                            (2 * rand() - 1) * deform[6 * idx + 3],
+                            (2 * rand() - 1) * deform[6 * idx + 4],
+                            (2 * rand() - 1) * deform[6 * idx + 5],
+                        )
                     )
                 InterpNode.ReplaceSection(j, modified_section)
 
@@ -283,6 +306,7 @@ def generate_unit_cell(config_dict):
         config_dict["yarn_width_to_spacing_ratio"],
         config_dict["weft_to_warp_ratio"],
         config_dict["weave_pattern"],
+        config_dict["deform"]
     )
 
     write_layer_to_layer_unit_cell_mesh(
