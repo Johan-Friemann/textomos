@@ -61,9 +61,9 @@ config_dict["matrix_ratios"] = [0.404, 0.481, 0.019, 0.096]
 
 config_dict["matrix_density"] = 1.0
 
-config_dict["offset"] = [0, 0, 0]
+config_dict["offset"] = [0, 0, 12]
 
-config_dict["tilt"] = [0, 0, 0]
+config_dict["tilt"] = [-1, 2, -3]
 
 config_dict["rot_axis"] = "x"
 
@@ -98,7 +98,7 @@ config_dict["display"] = True
 
 config_dict["photonic_noise"] = True
 
-config_dict["binning"] = 2
+config_dict["binning"] = 4
 
 config_dict["anode_angle"] = 12
 
@@ -120,7 +120,7 @@ config_dict["num_reference"] = 20
 
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 
-config_dict["sample_rotation_direction"] = -1 # Typically 1 for sim, and -1 for real scan
+config_dict["sample_rotation_direction"] = 1 # Typically 1 for sim, and -1 for real scan
 ################################################################################
 
 # generate_unit_cell(config_dict)
