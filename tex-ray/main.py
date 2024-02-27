@@ -1,6 +1,7 @@
 import tifffile
 from x_ray.x_ray import *
 from textile_generation.textile_generation import *
+from import_scanner_data.zeiss_xradia_410_versa import *
 
 ################################################################################
 config_dict = {}
@@ -60,9 +61,9 @@ config_dict["matrix_ratios"] = [0.404, 0.481, 0.019, 0.096]
 
 config_dict["matrix_density"] = 1.0
 
-config_dict["offset"] = [0, 0, 0]
+config_dict["offset"] = [0, 0, 12]
 
-config_dict["tilt"] = [0, 0, 0]
+config_dict["tilt"] = [-1, 2, -3]
 
 config_dict["rot_axis"] = "x"
 
@@ -76,21 +77,18 @@ config_dict["scanner_length_unit"] = "mm"
 
 config_dict["energy_unit"] = "keV"
 
-config_dict["detector_pixel_size"] = 0.03375 * 4
+# 13.5 um --> 0.0135 mm --> (LFOV) --> effective 0.0375 mm
+config_dict["detector_pixel_size"] = 13.5 / 0.4 / 1000.0
 
 config_dict["distance_source_origin"] = 60
 
 config_dict["distance_origin_detector"] = 80
 
-config_dict["detector_rows"] = 2048 // 4
+config_dict["detector_rows"] = 2048
 
-config_dict["detector_columns"] = 2048 // 4
+config_dict["detector_columns"] = 2048
 
-config_dict["x_ray_energies"] = [80]
-
-config_dict["x_ray_counts"] = [100]
-
-config_dict["number_of_projections"] = 1000
+config_dict["number_of_projections"] = 801
 
 config_dict["scanning_angle"] = 360
 
@@ -98,7 +96,31 @@ config_dict["threshold"] = 0.000000001
 
 config_dict["display"] = True
 
+config_dict["photonic_noise"] = True
+
+config_dict["binning"] = 4
+
+config_dict["anode_angle"] = 12
+
+config_dict["tube_voltage"] = 40
+
+config_dict["tube_power"] = 10
+
+config_dict["filter_thickness"] = 2.0
+
+config_dict["filter_material"] = "Al"
+
+config_dict["target_material"] = "W"
+
+config_dict["exposure_time"] = 5
+
+config_dict["energy_bin_width"] = 0.5
+
+config_dict["num_reference"] = 20
+
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
+
+config_dict["sample_rotation_direction"] = 1 # Typically 1 for sim, and -1 for real scan
 ################################################################################
 
 # generate_unit_cell(config_dict)

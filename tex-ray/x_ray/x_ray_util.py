@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import spekpy as sp
 from gvxrPython3 import gvxr
 
 """
@@ -26,6 +27,7 @@ def set_up_detector(
     detector_columns,
     detector_rows,
     detector_pixel_size,
+    binning=1,
     length_unit="m",
 ):
     """Set up the gVirtualXRay detector. Note that the reconstruction volume is
@@ -42,18 +44,120 @@ def set_up_detector(
         detector_pixel_size (float): The side length of the detector pixels.
 
     Keyword args:
+        binning (int): The binning number. It defines the side length of the
+                       square of pixels to average over. Must be  a divisor of
+                       both the detector rows and the detector columns.
         length_unit (string): The unit of length measurement (m, cm, mm, um).
                               Default unit is m (meter).
 
     Returns:
         -
     """
+    if detector_rows % binning != 0.0 or detector_columns % binning != 0.0:
+        raise ValueError(
+            "Bad arguments: binning must be a divisor of both the dector "
+            + "rows and the detector columns."
+        )
     gvxr.setDetectorUpVector(0, 0, 1)
     gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, length_unit)
-    gvxr.setDetectorNumberOfPixels(detector_columns, detector_rows)
-    gvxr.setDetectorPixelSize(
-        detector_pixel_size, detector_pixel_size, length_unit
+    gvxr.setDetectorNumberOfPixels(
+        detector_columns // binning, detector_rows // binning
     )
+    gvxr.setDetectorPixelSize(
+        detector_pixel_size * binning,
+        detector_pixel_size * binning,
+        length_unit,
+    )
+
+
+def generate_xray_spectrum(
+    anode_angle,
+    energy_bin_width,
+    tube_voltage,
+    tube_power,
+    exposure_time,
+    distance_source_detector,
+    offset,
+    detector_pixel_size,
+    binning=1,
+    filter_thickness=0.0,
+    filter_material="Al",
+    target_material="W",
+    length_unit="m",
+):
+    """Use SpekPy to generate an x-ray spectrum.
+
+    Args:
+        anode_angle (float): The effective x-ray tube anode angle given
+                             in degrees.
+        energy_bin_width (float): The width of the spectrum energy bins given
+                                  in kilovolts (kV).
+        tube_voltage (float): The voltage of the x-ray tube given in kilovolts
+                              (kV).
+        tube_power (float): The electrical power of the x-ray tube given in
+                            watts (W).
+        exposure_time (float): The x-ray exposure time given in seconds (s).
+        distance_source_detector: The distance from x-ray source to detector.
+        offset (list[float]): A list of length 3 that represent the sample
+                              offset in global coordinates, measured from the
+                              center of the sample (center of tiling).
+                              [0,0,0] results in no offset.
+        detector_pixel_size (float): The area of one detector pixel.
+    Keyword args:
+        binning (int): The binning number. It defines the side length of the
+                       square of pixels to average over. Used to scale
+                       flux appropriately.
+        filter_thickness (float): The thickness of the x-ray filter.
+                                  Default is no filter (=0.0).
+        filter_material (string): The chemical symbol of the filter material.
+                                  See SpekPy docs. Default is aluminium.
+        target_material (string): The chemical symbol of the target material.
+                                  See SpekPy docs. Default is tungsten.
+        length_unit (string): The unit of length measurement (m, cm, mm).
+                              Default unit is m (meter).
+    Returns:
+        (energy_bins, photon_flux) (numpy array[float]): Returns a tuple of the
+                                                         energy bins, and the
+                                                         photon flux per
+                                                         detector pixel.
+    """
+    if length_unit == "mm":
+        scale_factor = 1e-3
+    elif length_unit == "cm":
+        scale_factor = 1e-2
+    elif length_unit == "m":
+        scale_factor = 1.0
+    else:
+        raise ValueError(
+            "Bad arguments: length_unit must be 'm', 'cm', or 'mm'."
+        )
+    # Spekpy uses cm as unit, so we must convert. length_unit --> m --> cm
+    x = offset[0] * scale_factor * 100.0
+    y = offset[1] * scale_factor * 100.0
+    z = (distance_source_detector - offset[2]) * scale_factor * 100.0
+    detector_area = (
+        detector_pixel_size**2 * binning**2 * scale_factor**2 * 100.0**2
+    )  # cm^2
+
+    # for filter thickness SpekPy uses mm length_unit --> m --> mm
+    filter_d = filter_thickness * scale_factor * 1000.0
+
+    tube_current = tube_power / tube_voltage
+    charge = tube_current * exposure_time
+
+    spectrum = sp.Spek(
+        kvp=tube_voltage,
+        th=anode_angle,
+        dk=energy_bin_width,
+        mas=charge,
+        targ=target_material,
+        x=x,
+        y=y,
+        z=z,
+    ).filter(filter_material, filter_d)
+    bins, flux_per_area = spectrum.get_spectrum(diff=False)
+    # diff=False: photons / cm^2 / bin
+    return bins, flux_per_area * detector_area
 
 
 def set_up_xray_source(
@@ -249,12 +353,12 @@ def set_up_sample(
         raise ValueError(
             "Bad arguments: tilt should contain x, y, and z components."
         )
-    
+
     if len(tiling) != 3:
         raise ValueError(
             "Bad arguments: tiling should contain x, y, and z components."
         )
-    
+
     # cast to numpy
     tilt = np.array(tilt)
     offset = np.array(offset)
@@ -365,8 +469,44 @@ def set_up_sample(
                     )
 
 
+def add_photonic_noise(noise_free_projection, integrate_energy=True):
+    """Add Poisson distributed photonic noise (shot noise) to the projection.
+
+    Args:
+        noise_free_projection numpy array[float]): A noise-free projection.
+
+    Keyword args:
+        integrate_energy (bool): If true the measured energy is rescaled to
+                                 approximated number of photons counted before
+                                 adding the noise. After the noise is added
+                                 the resulting projection is scaled back to the
+                                 energy domain.
+
+    Returns:
+        noisy_projection (numpy array[float]): A noisy projection.
+    """
+    if integrate_energy:
+        expected_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
+        # This returns the energy in MeV, but that is fine since the output
+        # of gvxr.computeXRayImage(True) returns the image in MeV.
+        expected_energy = gvxr.getTotalEnergyWithDetectorResponse()
+        scale_factor = expected_photon_count / expected_energy
+        photonic_projection = noise_free_projection * scale_factor
+    else:
+        photonic_projection = noise_free_projection
+        scale_factor = 1.0
+
+    noisy_projection = np.random.poisson(photonic_projection)
+
+    return noisy_projection / scale_factor
+
+
 def perform_tomographic_scan(
-    num_projections, scanning_angle, display=False, integrate_energy=True
+    num_projections,
+    scanning_angle,
+    display=False,
+    integrate_energy=True,
+    photonic_noise=True,
 ):
     """Perform a tomographic scan consisting of a certain number of projections
        and sweeping a certain angle. The scan rotates the sample clockwise
@@ -380,6 +520,7 @@ def perform_tomographic_scan(
         display (bool): Will display the scanning scene if true.
         integrate_energy (bool): If true the energy fluence is measured by the
                                  detector. Photon count is measured if false.
+        photonic_noise (bool): If true photonic noise is added to projections.
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
@@ -387,6 +528,9 @@ def perform_tomographic_scan(
                                               shape (num_projections,
                                               detector_rows, detector_columns).
     """
+    # No need to correct for binning since it is taken care of during set-up.
+    # We do not need to account for binning in the noise since a sum of
+    # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     raw_projections = np.empty(
         (num_projections, detector_rows, detector_columns)
@@ -395,10 +539,10 @@ def perform_tomographic_scan(
     angular_step = scanning_angle / num_projections
     for angle_id in range(0, num_projections):
         # Compute an X-ray image and add it to the set of projections.
-        raw_projections[angle_id] = np.array(
-            gvxr.computeXRayImage(integrate_energy)
-        )
-
+        raw_projection = np.array(gvxr.computeXRayImage(integrate_energy))
+        if photonic_noise:
+            raw_projection = add_photonic_noise(raw_projection)
+        raw_projections[angle_id] = raw_projection
         # Update the rendering if display.
         if display:
             gvxr.displayScene()
@@ -409,7 +553,9 @@ def perform_tomographic_scan(
     return raw_projections
 
 
-def measure_flat_field(integrate_energy=True):
+def measure_flat_field(
+    integrate_energy=True, photonic_noise=True, num_reference=10
+):
     """Measure the flat field, i.e what the detector sees when the X-Ray source
        is on but there is no sample present. Can measure the energy fluence flat
        field, or the photon count flat field.
@@ -420,6 +566,10 @@ def measure_flat_field(integrate_energy=True):
     Keyword args:
         integrate_energy (bool): If true the energy fluence is measured by the
                           detector. Photon count is measured if false.
+        photonic_noise (bool): If true photonic noise is added to flat field.
+        num_reference (int): The number of reference images taken (and averaged)
+                             to generate the flat field. Small number can result
+                             in ring artefacts forming.
 
     Returns:
         flat_field_image(numpy array[float]): A numpy array containing the flat
@@ -427,23 +577,33 @@ def measure_flat_field(integrate_energy=True):
                                               (detector_rows, detector_columns).
 
     """
+    # No need to correct for binning since it is taken care of during set-up.
+    # We do not need to account for binning in the noise since a sum of
+    # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     flat_field_image = np.ones((detector_rows, detector_columns))
 
-    energy_bins = gvxr.getEnergyBins("MeV")
-    photon_count_per_bin = gvxr.getPhotonCountEnergyBins()
+    # This returns the energy in MeV, but that is fine since the output
+    # of gvxr.computeXRayImage(True) returns the image in MeV.
+    total_energy = gvxr.getTotalEnergyWithDetectorResponse()
+    total_photon_count = np.sum(gvxr.getPhotonCountEnergyBins())
 
-    # If not measuring the energy fluence, set energy bins to 1 [arb units] in
-    # order to return the total number of photons instead of total energy.
+    # If not measuring the energy fluence, set energy to photon count to prevent
+    # repeating code.
     if not integrate_energy:
-        energy_bins = [1 for _ in range(len(energy_bins))]
+        total_energy = total_photon_count
 
-    total_energy = 0.0
-    for energy, count in zip(energy_bins, photon_count_per_bin):
-        total_energy += energy * count
     flat_field_image *= total_energy
-
-    return flat_field_image
+    noisy_image = np.zeros(flat_field_image.shape)
+    if photonic_noise:
+        for i in range(num_reference):
+            noisy_image += add_photonic_noise(
+                flat_field_image, integrate_energy=integrate_energy
+            )
+    else:
+        noisy_image = flat_field_image * num_reference
+    noisy_image /= num_reference
+    return noisy_image
 
 
 def measure_dark_field(integrate_energy=True):
@@ -464,6 +624,7 @@ def measure_dark_field(integrate_energy=True):
                                               (detector_rows, detector_columns).
 
     """
+    # No need to correct for binning since it is taken care of during set-up.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
     dark_field_image = np.zeros((detector_rows, detector_columns))
 
@@ -537,6 +698,10 @@ def neg_log_transform(corrected_projections, threshold):
     neg_log_projections[neg_log_projections < threshold] = threshold
 
     neg_log_projections = -np.log(neg_log_projections)
+
+    # Take the threshold again in order to prevent negative values.
+    # This can occur if the noise happens to make I>I0.
+    neg_log_projections[neg_log_projections < threshold] = threshold
 
     return neg_log_projections
 
