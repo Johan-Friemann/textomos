@@ -1,4 +1,5 @@
 import pymeshlab as pml
+import numpy as np
 from TexGen.Core import *
 
 
@@ -29,8 +30,9 @@ def create_layer2layer_unit_cell(
         num_layers (int): The number of layers (weft yarns have one additional
                          layer).
 
-        spacing ratio (float): A number between 0 and 1 that determines how wide
-                              the yarns are in relation to the yarn spacing.
+        yarn_width_to_spacing_ratio (float): A number between 0 and 1 that
+                                             determines how wide the yarns are
+                                             in relation to the yarn spacing.
 
         weft_to_warp_ratio (float): A number between 0 and 1 that determines how
                                    thick weft yarns are in relation to the warp
@@ -52,6 +54,10 @@ def create_layer2layer_unit_cell(
 
         Warp (CTextile): A TexGen object that describes the warp yarns.
     """
+    squeeze = [0.1, 0.2, 0.1, 0.2]
+    twist = [0.1, 0.1]
+    peturb_yarns = True
+
     x_yarn_spacing = cell_y_size / num_weft
     y_yarn_spacing = cell_x_size / num_warp
     x_yarn_width = x_yarn_spacing * spacing_ratio
@@ -91,7 +97,50 @@ def create_layer2layer_unit_cell(
 
     for i in range(Textile.GetNumYarns()):
         Yarn = Textile.GetYarn(i)
+        num_nodes = Yarn.GetNumNodes()
+        # Decide if weft or warp.
         if i < num_weft * (num_layers + 1):
+            idx = 0
+        else:
+            idx = 1
+
+        if peturb_yarns:
+            Yarn.ConvertToInterpNodes()
+            YarnSection = Yarn.GetYarnSection()
+            InterpNode = YarnSection.GetSectionInterpNode()
+            # In order to ensure continuity in the unit cell, first and last
+            # nodes must habe the same section. Thus assign outside the loop.
+            first_section = CSectionRotated(
+                CSectionScaled(
+                    InterpNode.GetNodeSection(0),
+                    XY(
+                        1.0 + (2 * np.random.rand() - 1) * squeeze[2 * idx],
+                        1.0 + (2 * np.random.rand() - 1) * squeeze[2 * idx + 1],
+                    ),
+                ),
+                twist[idx] * (2 * np.random.rand() - 1),
+            )
+            for j in range(num_nodes):
+                if j == 0 or j == num_nodes - 1:
+                    modified_section = first_section
+                else:
+                    original_section = InterpNode.GetNodeSection(j)
+                    modified_section = CSectionRotated(
+                        CSectionScaled(
+                            original_section,
+                            XY(
+                                1.0
+                                + (2 * np.random.rand() - 1) * squeeze[2 * idx],
+                                1.0
+                                + (2 * np.random.rand() - 1)
+                                * squeeze[2 * idx + 1],
+                            ),
+                        ),
+                        twist[idx] * (2 * np.random.rand() - 1),
+                    )
+                InterpNode.ReplaceSection(j, modified_section)
+
+        if idx == 0:
             Weft.AddYarn(Yarn)
         else:
             Warp.AddYarn(Yarn)
