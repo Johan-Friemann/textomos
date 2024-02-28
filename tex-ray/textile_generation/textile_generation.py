@@ -300,7 +300,7 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
     mesh_set.save_current_mesh(warp_path)
 
 
-def check_config_dict_layer2layer(config_dict):
+def check_layer2layer_config_dict(config_dict):
     """Check that a config dict pertaining a layer2layer unit cell is valid.
        If invalid an appropriate exception is raised.
 
@@ -403,7 +403,7 @@ def generate_unit_cell(config_dict):
         -
     """
 
-    args, opt_args = check_config_dict_layer2layer(config_dict)
+    args, opt_args = check_layer2layer_config_dict(config_dict)
 
     Weft, Warp = create_layer2layer_unit_cell(
         args[3],
