@@ -14,7 +14,7 @@ def create_layer2layer_unit_cell(
     spacing_ratio,
     weft_to_warp_ratio,
     weave_pattern,
-    deform
+    deform,
 ):
     """Generate a layer to layer fabric unit cell using TexGen.
 
@@ -211,10 +211,15 @@ def write_layer_to_layer_unit_cell_mesh(
     matrix_mesh.SaveToSTL(matrix_path, True)
 
 
-def boolean_difference_post_processing(weft_path, warp_path):
+def boolean_difference_post_processing(
+    weft_path, warp_path, matrix_path, cut_matrix=False
+):
     """Use PyMeshLab's boolean difference method to cut the warp yarns out of
-       the weft yarns to resolve mesh overlap. This function overwrites the weft
-       mesh.
+       the weft yarns to resolve mesh overlap. Therafter the resulting weft and
+       warp are cut out from the matrix. This function overwrites the weft (and
+       matrix meshes if cut_matrix is True). The matrix_path variable is unused
+       when not cutting the yarns out of the matrix (albeit still required for
+       api consistency). 
 
     Args:
         weft_path (str): The absolute path (including file name) to the weft
@@ -223,9 +228,11 @@ def boolean_difference_post_processing(weft_path, warp_path):
         warp_path (str): The absolute path (including file name) to the warp
                          mesh.
 
+        matrix_path (str): The absolute path (including file name) to the matrix
+                           mesh.
 
     Keyword args:
-        -
+        cut_matrix (bool): Will cut the weft and warp out of the matrix if True.
 
     Returns:
         -
@@ -233,8 +240,13 @@ def boolean_difference_post_processing(weft_path, warp_path):
     mesh_set = pml.MeshSet()
     mesh_set.load_new_mesh(warp_path)
     mesh_set.load_new_mesh(weft_path)
-    mesh_set.generate_boolean_difference()
+    mesh_set.load_new_mesh(matrix_path)
+    mesh_set.generate_boolean_difference(first_mesh=1, second_mesh=0)
     mesh_set.save_current_mesh(weft_path)
+    if cut_matrix:
+        mesh_set.generate_boolean_union(first_mesh=1, second_mesh=0)
+        mesh_set.generate_boolean_difference(first_mesh=2, second_mesh=4)
+        mesh_set.save_current_mesh(matrix_path)
 
 
 def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
@@ -306,7 +318,7 @@ def generate_unit_cell(config_dict):
         config_dict["yarn_width_to_spacing_ratio"],
         config_dict["weft_to_warp_ratio"],
         config_dict["weave_pattern"],
-        config_dict["deform"]
+        config_dict["deform"],
     )
 
     write_layer_to_layer_unit_cell_mesh(
@@ -318,7 +330,10 @@ def generate_unit_cell(config_dict):
     )
 
     boolean_difference_post_processing(
-        config_dict["weft_path"], config_dict["warp_path"]
+        config_dict["weft_path"],
+        config_dict["warp_path"],
+        config_dict["matrix_path"],
+        cut_matrix=config_dict["cut_matrix"],
     )
 
     set_origin_to_barycenter(

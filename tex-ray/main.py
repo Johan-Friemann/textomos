@@ -12,6 +12,8 @@ config_dict["warp_path"] = "./tex-ray/meshes/warp.stl"
 
 config_dict["matrix_path"] = "./tex-ray/meshes/matrix.stl"
 
+config_dict["cut_matrix"] = True
+
 config_dict["unit_cell_weft_length"] = 21.5
 
 config_dict["unit_cell_warp_length"] = 6.5
