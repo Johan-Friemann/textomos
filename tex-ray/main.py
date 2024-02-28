@@ -39,6 +39,21 @@ config_dict["weave_pattern"] = [
     [5, 3, -1],
 ]
 
+config_dict["deform"] = [
+    10,
+    10,
+    10,
+    0.1,
+    0.1,
+    0.1,
+    5,
+    5,
+    10,
+    0.05,
+    0.05,
+    0.05,
+]
+
 config_dict["weft_path"] = "./tex-ray/meshes/weft.stl"
 
 config_dict["weft_elements"] = [6]
@@ -120,7 +135,9 @@ config_dict["num_reference"] = 20
 
 config_dict["reconstruction_algorithm"] = "FDK_CUDA"
 
-config_dict["sample_rotation_direction"] = 1 # Typically 1 for sim, and -1 for real scan
+# Typically 1 for sim, and -1 for real scan
+config_dict["sample_rotation_direction"] = 1  
+
 ################################################################################
 
 # generate_unit_cell(config_dict)
