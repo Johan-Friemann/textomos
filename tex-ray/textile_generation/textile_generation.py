@@ -3,6 +3,10 @@ import numpy as np
 from numpy.random import rand
 from TexGen.Core import *
 
+class TextileConfigError(Exception):
+    """Exception raised when missing a required config dictionary entry."""
+    pass
+
 
 def create_layer2layer_unit_cell(
     cell_x_size,
@@ -212,14 +216,14 @@ def write_layer_to_layer_unit_cell_mesh(
 
 
 def boolean_difference_post_processing(
-    weft_path, warp_path, matrix_path, cut_matrix=False
+    weft_path, warp_path, matrix_path, cut_matrix
 ):
     """Use PyMeshLab's boolean difference method to cut the warp yarns out of
        the weft yarns to resolve mesh overlap. Therafter the resulting weft and
        warp are cut out from the matrix. This function overwrites the weft (and
        matrix meshes if cut_matrix is True). The matrix_path variable is unused
        when not cutting the yarns out of the matrix (albeit still required for
-       api consistency). 
+       api consistency).
 
     Args:
         weft_path (str): The absolute path (including file name) to the weft
@@ -231,8 +235,9 @@ def boolean_difference_post_processing(
         matrix_path (str): The absolute path (including file name) to the matrix
                            mesh.
 
-    Keyword args:
         cut_matrix (bool): Will cut the weft and warp out of the matrix if True.
+    Keyword args:
+        -
 
     Returns:
         -
@@ -295,6 +300,95 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
     mesh_set.save_current_mesh(warp_path)
 
 
+def check_config_dict_layer2layer(config_dict):
+    """Check that a config dict pertaining a layer2layer unit cell is valid.
+       If invalid an appropriate exception is raised.
+
+        Args:
+            config_dict (dictionary): A dictionary of tex_ray options.
+
+        Keyword args:
+            -
+
+        Returns:
+            args list[]: A list of required args to generate the UC.
+            opt_args list[]: A list of optional args used for UC generation.
+    
+    """
+    args = []
+    args.append(config_dict.get("weft_path", "./tex-ray/meshes/weft.stl"))
+    args.append(config_dict.get("warp_path", "./tex-ray/meshes/warp.stl"))
+    args.append(config_dict.get("matrix_path", "./tex-ray/meshes/matrix.stl"))
+    if not isinstance(args[0], str):
+        raise TypeError("Weft mesh path must be a string!")
+    if not isinstance(args[1], str):
+        raise TypeError("Warp mesh path must be a string!")
+    if not isinstance(args[2], str):
+        raise TypeError("Weft mesh path must be a string!")
+
+    req_keys = (
+        "unit_cell_weft_length",
+        "unit_cell_warp_length",
+        "unit_cell_thickness",
+        "weft_yarns_per_layer",
+        "warp_yarns_per_layer",
+        "number_of_yarn_layers",
+        "yarn_width_to_spacing_ratio",
+        "weft_to_warp_ratio",
+        "weave_pattern",
+    )
+
+    req_types = (
+        float,
+        float,
+        float,
+        int,
+        int,
+        int,
+        float,
+        float,
+        list,
+    )
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise TextileConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+
+    opt_keys = ("deform", "cut_matrix")
+    def_vals = ([], True)
+    opt_types = (list, bool)
+    opt_args = []
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        opt_args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(opt_args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(opt_args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+    return args, opt_args
+
 def generate_unit_cell(config_dict):
     """Generate a woven composite unit cell and create a mesh for weft yarns,
     warp yarns, and matrix respectively.
@@ -308,36 +402,39 @@ def generate_unit_cell(config_dict):
     Returns:
         -
     """
+
+    args, opt_args = check_config_dict_layer2layer(config_dict)
+
     Weft, Warp = create_layer2layer_unit_cell(
-        config_dict["unit_cell_weft_length"],
-        config_dict["unit_cell_warp_length"],
-        config_dict["unit_cell_thickness"],
-        config_dict["weft_yarns_per_layer"],
-        config_dict["warp_yarns_per_layer"],
-        config_dict["number_of_yarn_layers"],
-        config_dict["yarn_width_to_spacing_ratio"],
-        config_dict["weft_to_warp_ratio"],
-        config_dict["weave_pattern"],
-        config_dict["deform"],
+        args[3],
+        args[4],
+        args[5],
+        args[6],
+        args[7],
+        args[8],
+        args[9],
+        args[10],
+        args[11],
+        opt_args[0],
     )
 
     write_layer_to_layer_unit_cell_mesh(
         Weft,
         Warp,
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
+        args[0],
+        args[1],
+        args[2],
     )
 
     boolean_difference_post_processing(
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
-        cut_matrix=config_dict["cut_matrix"],
+        args[0],
+        args[1],
+        args[2],
+        opt_args[1],
     )
 
     set_origin_to_barycenter(
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
+        args[0],
+        args[1],
+        args[2],
     )
