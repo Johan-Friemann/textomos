@@ -3,8 +3,10 @@ import numpy as np
 from numpy.random import rand
 from TexGen.Core import *
 
+
 class TextileConfigError(Exception):
     """Exception raised when missing a required config dictionary entry."""
+
     pass
 
 
@@ -302,18 +304,18 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
 
 def check_layer2layer_config_dict(config_dict):
     """Check that a config dict pertaining a layer2layer unit cell is valid.
-       If invalid an appropriate exception is raised.
+    If invalid an appropriate exception is raised.
 
-        Args:
-            config_dict (dictionary): A dictionary of tex_ray options.
+     Args:
+         config_dict (dictionary): A dictionary of tex_ray options.
 
-        Keyword args:
-            -
+     Keyword args:
+         -
 
-        Returns:
-            args list[]: A list of required args to generate the UC.
-            opt_args list[]: A list of optional args used for UC generation.
-    
+     Returns:
+         args list[]: A list of required args to generate the UC.
+         opt_args list[]: A list of optional args used for UC generation.
+
     """
     args = []
     args.append(config_dict.get("weft_path", "./tex-ray/meshes/weft.stl"))
@@ -371,6 +373,71 @@ def check_layer2layer_config_dict(config_dict):
                 + "."
             )
 
+        if req_key is not req_keys[-1]:
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value '"
+                    + str(args[-1])
+                    + "' of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+            if (  # Two of the entries also have upper bounds.
+                req_key is req_keys[-2] or req_key is req_keys[-3]
+            ) and not args[-1] < 1:
+                raise ValueError(
+                    "The given value '"
+                    + str(args[-1])
+                    + "' of '"
+                    + req_key
+                    + "' is invalid. It should be < 1."
+                )
+        else:  # Special exception raising for weave pattern.
+            for l in args[-1]:
+                if len(l) != 3:
+                    raise ValueError(
+                        "Each row of '" + req_key + "' must have length 3."
+                    )
+                for i in l:
+                    if not isinstance(i, int):
+                        raise TypeError(
+                            "All entries of '" + req_type + "' must be int."
+                        )
+                    if l[0] < 0:
+                        raise ValueError(
+                            "The entries in first column of '"
+                            + req_key
+                            + "' must >= 0."
+                        )
+                    if l[1] < 0:
+                        raise ValueError(
+                            "The entries in second column of '"
+                            + req_key
+                            + "' must >= 0."
+                        )
+                    if l[0] > args[7]: # We offset by 3 because of the strings.
+                        raise ValueError(
+                            "The entries in first column of '"
+                            + req_key
+                            + "' must < the value of '"
+                            + req_keys[4]
+                            + "'."
+                        )
+                    if l[1] > args[6]: # We offset by 3 because of the strings.
+                        raise ValueError(
+                            "The entries in second column of '"
+                            + req_key
+                            + "' must < the value of '"
+                            + req_keys[3]
+                            + "'."
+                        )
+                    if not l[2] in (-1, 1):
+                        raise ValueError(
+                            "The entries in the third column of '"
+                            + req_key
+                            + "' must be either 1 or -1."
+                        )
+
     opt_keys = ("deform", "cut_matrix")
     def_vals = ([], True)
     opt_types = (list, bool)
@@ -388,6 +455,7 @@ def check_layer2layer_config_dict(config_dict):
                 + "."
             )
     return args, opt_args
+
 
 def generate_unit_cell(config_dict):
     """Generate a woven composite unit cell and create a mesh for weft yarns,
