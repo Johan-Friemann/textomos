@@ -373,7 +373,7 @@ def check_layer2layer_config_dict(config_dict):
                 + "."
             )
 
-        if req_key is not req_keys[-1]:
+        if req_key is not "weave_pattern":
             if not args[-1] > 0:
                 raise ValueError(
                     "The given value '"
@@ -383,7 +383,8 @@ def check_layer2layer_config_dict(config_dict):
                     + "' is invalid. It should be > 0."
                 )
             if (  # Two of the entries also have upper bounds.
-                req_key is req_keys[-2] or req_key is req_keys[-3]
+                req_key is "yarn_width_to_spacing_ratio"
+                or req_key is "weft_to_warp_ratio"
             ) and not args[-1] < 1:
                 raise ValueError(
                     "The given value '"
@@ -392,50 +393,41 @@ def check_layer2layer_config_dict(config_dict):
                     + req_key
                     + "' is invalid. It should be < 1."
                 )
-        else:  # Special exception raising for weave pattern.
+        else:  # Special exception raising for weave_pattern.
             for l in args[-1]:
                 if len(l) != 3:
                     raise ValueError(
-                        "Each row of '" + req_key + "' must have length 3."
+                        "Each row of 'weave_pattern' must have length 3."
                     )
                 for i in l:
                     if not isinstance(i, int):
                         raise TypeError(
-                            "All entries of '" + req_type + "' must be int."
+                            "All entries of 'weave_pattern' must be integers."
                         )
                     if l[0] < 0:
                         raise ValueError(
-                            "The entries in first column of '"
-                            + req_key
-                            + "' must >= 0."
+                            "The entries in first column of 'weave_pattern' "
+                            + "must >= 0."
                         )
                     if l[1] < 0:
                         raise ValueError(
-                            "The entries in second column of '"
-                            + req_key
-                            + "' must >= 0."
+                            "The entries in second column of 'weave_pattern' "
+                            + "must >= 0."
                         )
-                    if l[0] > args[7]: # We offset by 3 because of the strings.
+                    if l[0] >= config_dict.get("warp_yarns_per_layer"):
                         raise ValueError(
-                            "The entries in first column of '"
-                            + req_key
-                            + "' must < the value of '"
-                            + req_keys[4]
-                            + "'."
+                            "The entries in first column of 'weave_pattern' "
+                            + "must < the value of 'warp_yarns_per_layer."
                         )
-                    if l[1] > args[6]: # We offset by 3 because of the strings.
+                    if l[1] >= config_dict.get("weft_yarns_per_layer"):
                         raise ValueError(
-                            "The entries in second column of '"
-                            + req_key
-                            + "' must < the value of '"
-                            + req_keys[3]
-                            + "'."
+                            "The entries in second column of 'weave_pattern' "
+                            + "must < the value of 'weft_yarns_per_layer'."
                         )
                     if not l[2] in (-1, 1):
                         raise ValueError(
                             "The entries in the third column of '"
-                            + req_key
-                            + "' must be either 1 or -1."
+                            + "weave_pattern' must be either 1 or -1."
                         )
 
     opt_keys = ("deform", "cut_matrix")
@@ -460,6 +452,9 @@ def check_layer2layer_config_dict(config_dict):
 def generate_unit_cell(config_dict):
     """Generate a woven composite unit cell and create a mesh for weft yarns,
     warp yarns, and matrix respectively.
+
+    Users are expected to interact with this function only and not use any
+    of the internals directly.
 
     Args:
         config_dict (dictionary): A dictionary of tex_ray options.
