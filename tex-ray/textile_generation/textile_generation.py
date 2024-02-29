@@ -376,9 +376,9 @@ def check_layer2layer_config_dict(config_dict):
         if req_key is not "weave_pattern":
             if not args[-1] > 0:
                 raise ValueError(
-                    "The given value '"
+                    "The given value "
                     + str(args[-1])
-                    + "' of '"
+                    + " of '"
                     + req_key
                     + "' is invalid. It should be > 0."
                 )
@@ -387,9 +387,9 @@ def check_layer2layer_config_dict(config_dict):
                 or req_key is "weft_to_warp_ratio"
             ) and not args[-1] < 1:
                 raise ValueError(
-                    "The given value '"
+                    "The given value "
                     + str(args[-1])
-                    + "' of '"
+                    + " of '"
                     + req_key
                     + "' is invalid. It should be < 1."
                 )
@@ -446,6 +446,20 @@ def check_layer2layer_config_dict(config_dict):
                 + str(opt_type)
                 + "."
             )
+        if opt_key is "deform":  # Special exception raising for 'deform'
+            if not len(opt_args[-1]) in [0, 12]:
+                raise ValueError("The entry 'deform' must have length 0 or 12.")
+            for i in range(len(opt_args[-1])):
+                if not isinstance(opt_args[-1][i], float):
+                    raise TypeError("All entries of 'deform' must be floats.")
+                if opt_args[-1][i] < 0.0:
+                    raise ValueError("All entries of 'deform' must >= 0.")
+                if i in [0, 1, 6, 7] and opt_args[-1][i] > 100.0:
+                    raise ValueError(
+                        "All scaling entries (0,1,6, and 7) of 'deform' must "
+                        + " <= 100.0."
+                    )
+
     return args, opt_args
 
 
