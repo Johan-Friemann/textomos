@@ -318,17 +318,10 @@ def check_layer2layer_config_dict(config_dict):
 
     """
     args = []
-    args.append(config_dict.get("weft_path", "./tex-ray/meshes/weft.stl"))
-    args.append(config_dict.get("warp_path", "./tex-ray/meshes/warp.stl"))
-    args.append(config_dict.get("matrix_path", "./tex-ray/meshes/matrix.stl"))
-    if not isinstance(args[0], str):
-        raise TypeError("Weft mesh path must be a string!")
-    if not isinstance(args[1], str):
-        raise TypeError("Warp mesh path must be a string!")
-    if not isinstance(args[2], str):
-        raise TypeError("Weft mesh path must be a string!")
-
     req_keys = (
+        "weft_path",
+        "warp_path",
+        "matrix_path",
         "unit_cell_weft_length",
         "unit_cell_warp_length",
         "unit_cell_thickness",
@@ -341,6 +334,9 @@ def check_layer2layer_config_dict(config_dict):
     )
 
     req_types = (
+        str,
+        str,
+        str,
         float,
         float,
         float,
@@ -373,27 +369,8 @@ def check_layer2layer_config_dict(config_dict):
                 + "."
             )
 
-        if req_key is not "weave_pattern":
-            if not args[-1] > 0:
-                raise ValueError(
-                    "The given value "
-                    + str(args[-1])
-                    + " of '"
-                    + req_key
-                    + "' is invalid. It should be > 0."
-                )
-            if (  # Two of the entries also have upper bounds.
-                req_key is "yarn_width_to_spacing_ratio"
-                or req_key is "weft_to_warp_ratio"
-            ) and not args[-1] < 1:
-                raise ValueError(
-                    "The given value "
-                    + str(args[-1])
-                    + " of '"
-                    + req_key
-                    + "' is invalid. It should be < 1."
-                )
-        else:  # Special exception raising for weave_pattern.
+        # Special exception raising for weave_pattern, and for paths.
+        if req_key == "weave_pattern":
             for l in args[-1]:
                 if len(l) != 3:
                     raise ValueError(
@@ -429,6 +406,26 @@ def check_layer2layer_config_dict(config_dict):
                             "The entries in the third column of '"
                             + "weave_pattern' must be either 1 or -1."
                         )
+        elif not req_key in ["weft_path", "warp_path", "matrix_path"]:
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+            if (  # Two of the entries also have upper bounds.
+                req_key == "yarn_width_to_spacing_ratio"
+                or req_key == "weft_to_warp_ratio"
+            ) and not args[-1] < 1:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be < 1."
+                )
 
     opt_keys = ("deform", "cut_matrix")
     def_vals = ([], True)
@@ -446,7 +443,7 @@ def check_layer2layer_config_dict(config_dict):
                 + str(opt_type)
                 + "."
             )
-        if opt_key is "deform":  # Special exception raising for 'deform'
+        if opt_key == "deform":  # Special exception raising for 'deform'
             if not len(opt_args[-1]) in [0, 12]:
                 raise ValueError("The entry 'deform' must have length 0 or 12.")
             for i in range(len(opt_args[-1])):
