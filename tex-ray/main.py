@@ -1,5 +1,6 @@
 import tifffile
-from x_ray.x_ray import *
+from x_ray import generate_sinograms
+from reconstruction import perform_tomographic_reconstruction
 from textile_generation.textile_generation import *
 from import_scanner_data.zeiss_xradia_410_versa import *
 
