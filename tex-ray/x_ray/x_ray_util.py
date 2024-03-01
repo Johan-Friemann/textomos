@@ -53,11 +53,6 @@ def set_up_detector(
     Returns:
         -
     """
-    if detector_rows % binning != 0.0 or detector_columns % binning != 0.0:
-        raise ValueError(
-            "Bad arguments: binning must be a divisor of both the dector "
-            + "rows and the detector columns."
-        )
     gvxr.setDetectorUpVector(0, 0, 1)
     gvxr.setDetectorPosition(distance_origin_detector, 0.0, 0.0, length_unit)
     gvxr.setDetectorNumberOfPixels(
@@ -127,10 +122,7 @@ def generate_xray_spectrum(
         scale_factor = 1e-2
     elif length_unit == "m":
         scale_factor = 1.0
-    else:
-        raise ValueError(
-            "Bad arguments: length_unit must be 'm', 'cm', or 'mm'."
-        )
+
     # Spekpy uses cm as unit, so we must convert. length_unit --> m --> cm
     x = offset[0] * scale_factor * 100.0
     y = offset[1] * scale_factor * 100.0
@@ -196,27 +188,16 @@ def set_up_xray_source(
     Returns:
         -
     """
-
-    if len(energies) != len(counts):
-        raise ValueError(
-            "Bad arguments: 1st argument 'energies' and 2nd "
-            + "argument 'counts' must be of the same length!"
-        )
-
     gvxr.resetBeamSpectrum()
+    gvxr.setSourcePosition(-distance_source_origin, 0.0, 0.0, length_unit)
 
     if focal_spot_size <= 0:
-        gvxr.setSourcePosition(-distance_source_origin, 0.0, 0.0, length_unit)
         gvxr.usePointSource()
     else:
-        raise NotImplementedError(
-            "gvxr currently does not have a correct "
-            + "implementation available in the python pkg."
-        )
         gvxr.setFocalSpot(
             -distance_source_origin,
-            0,
-            0,
+            0.0,
+            0.0,
             focal_spot_size,
             length_unit,
             sub_sources,
@@ -312,53 +293,6 @@ def set_up_sample(
     Returns:
         -
     """
-    if len(weft_elements) != len(weft_ratios):
-        raise ValueError(
-            "Bad arguments: number of weft ratios must agree "
-            + "with the number of elements!"
-        )
-
-    if sum(weft_ratios) != 1.0:
-        raise ValueError("Bad arguments: sum of weft ratios must be 1.0.")
-
-    if len(warp_elements) != len(warp_ratios):
-        raise ValueError(
-            "Bad arguments: number of warp ratios must agree "
-            + "with the number of elements!"
-        )
-
-    if sum(warp_ratios) != 1.0:
-        raise ValueError("Bad arguments: sum of warp ratios must be 1.0.")
-
-    if len(matrix_elements) != len(matrix_ratios):
-        raise ValueError(
-            "Bad arguments: number of matrix ratios must agree "
-            + "with the number of elements!"
-        )
-
-    if sum(matrix_ratios) != 1.0:
-        raise ValueError("Bad arguments: sum of matrix ratios must be 1.0.")
-
-    if rot_axis not in ["x", "y", "z"]:
-        raise ValueError(
-            "Bad arguments: Rotation axis must be 'x', 'y', or 'z'."
-        )
-
-    if len(offset) != 3:
-        raise ValueError(
-            "Bad arguments: offset should contain x, y, and z components."
-        )
-
-    if len(tilt) != 3:
-        raise ValueError(
-            "Bad arguments: tilt should contain x, y, and z components."
-        )
-
-    if len(tiling) != 3:
-        raise ValueError(
-            "Bad arguments: tiling should contain x, y, and z components."
-        )
-
     # cast to numpy
     tilt = np.array(tilt)
     offset = np.array(offset)
