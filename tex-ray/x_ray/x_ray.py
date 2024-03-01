@@ -280,8 +280,9 @@ def check_reconstruction_config_dict(config_dict):
         -
 
     Returns:
-        args list[]: A list of required args to perform the reconstruction.
-        opt_args list[]: A list of optional args used for the reconstruction.
+        recon_dict (dict): A dictionary consisting of relevant X-Ray CT scan
+                           reconstruction parameters.
+
 
     """
     args = []
