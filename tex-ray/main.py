@@ -14,4 +14,4 @@ generate_unit_cell(config_dict)
 sinograms = generate_sinograms(config_dict)
 reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
 
-tifffile.imwrite(config_dict["output_path"], reconstruction)
+tifffile.imwrite(config_dict["reconstruction_output_path"], reconstruction)

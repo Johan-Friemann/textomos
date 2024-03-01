@@ -2,7 +2,8 @@
     "weft_path": "./tex-ray/meshes/weft.stl",
     "warp_path": "./tex-ray/meshes/warp.stl",
     "matrix_path": "./tex-ray/meshes/matrix.stl",
-    "output_path": "./tex-ray/reconstructions/reconstruction.tif",
+    "reconstruction_output_path": "./tex-ray/reconstructions/reconstruction.tif",
+    "segmentation_output_path": "./tex-ray/segmentations/segmentation.tif",
 
 
     "cut_matrix": true,
