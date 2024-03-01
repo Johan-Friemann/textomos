@@ -440,7 +440,6 @@ def generate_sinograms(config_dict):
         xray_config_dict["exposure_time"],
         xray_config_dict["distance_source_origin"]
         + xray_config_dict["distance_origin_detector"],
-        xray_config_dict["offset"],
         xray_config_dict["detector_pixel_size"],
         binning=xray_config_dict["binning"],
         filter_thickness=xray_config_dict["filter_thickness"],
