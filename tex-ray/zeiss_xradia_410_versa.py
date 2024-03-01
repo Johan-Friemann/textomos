@@ -11,7 +11,7 @@ import numpy as np
 from olefile import isOleFile, OleFileIO
 import tifffile
 
-from x_ray import neg_log_transform
+from x_ray_simulation import neg_log_transform
 
 
 def read_txm_scan_data(in_path):
