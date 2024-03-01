@@ -1,8 +1,8 @@
 import tifffile
 from x_ray import generate_sinograms
-from reconstruction import perform_tomographic_reconstruction
-from textile_generation.textile_generation import *
-from import_scanner_data.zeiss_xradia_410_versa import *
+from tomographic_reconstruction import perform_tomographic_reconstruction
+from textile_generation import generate_unit_cell
+from zeiss_xradia_410_versa import read_txrm_scan_data, read_txm_scan_data
 
 ################################################################################
 config_dict = {}
@@ -139,7 +139,7 @@ config_dict["sample_rotation_direction"] = 1
 
 ################################################################################
 
-# generate_unit_cell(config_dict)
+generate_unit_cell(config_dict)
 
 sinograms = generate_sinograms(config_dict)
 reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
