@@ -72,7 +72,6 @@ def generate_xray_spectrum(
     tube_power,
     exposure_time,
     distance_source_detector,
-    offset,
     detector_pixel_size,
     binning=1,
     filter_thickness=0.0,
@@ -93,10 +92,6 @@ def generate_xray_spectrum(
                             watts (W).
         exposure_time (float): The x-ray exposure time given in seconds (s).
         distance_source_detector: The distance from x-ray source to detector.
-        offset (list[float]): A list of length 3 that represent the sample
-                              offset in global coordinates, measured from the
-                              center of the sample (center of tiling).
-                              [0,0,0] results in no offset.
         detector_pixel_size (float): The area of one detector pixel.
     Keyword args:
         binning (int): The binning number. It defines the side length of the
@@ -124,9 +119,9 @@ def generate_xray_spectrum(
         scale_factor = 1.0
 
     # Spekpy uses cm as unit, so we must convert. length_unit --> m --> cm
-    x = offset[0] * scale_factor * 100.0
-    y = offset[1] * scale_factor * 100.0
-    z = (distance_source_detector - offset[2]) * scale_factor * 100.0
+    x = 0.0
+    y = 0.0
+    z = distance_source_detector * scale_factor * 100.0
     detector_area = (
         detector_pixel_size**2 * binning**2 * scale_factor**2 * 100.0**2
     )  # cm^2
