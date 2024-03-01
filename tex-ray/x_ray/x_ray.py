@@ -16,6 +16,12 @@ class XrayConfigError(Exception):
     pass
 
 
+class ReconConfigError(Exception):
+    """Exception raised when missing a required config dictionary entry."""
+
+    pass
+
+
 def check_xray_config_dict(config_dict):
     """Check that a config dict pertaining an X-Ray CT scan simulation is valid.
       If invalid an appropriate exception is raised.
@@ -278,7 +284,99 @@ def check_reconstruction_config_dict(config_dict):
         opt_args list[]: A list of optional args used for the reconstruction.
 
     """
+    args = []
 
+    req_keys = (
+        "sample_rotation_direction",
+        "scanning_angle",
+        "number_of_projections",
+        "distance_source_origin",
+        "distance_origin_detector",
+        "detector_pixel_size",
+        "detector_columns",
+        "detector_rows",
+    )
+    req_types = (int, float, int, float, float, float, int, int)
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise ReconConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+        if req_key != "sample_rotation_direction":
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+        else:
+            if not args[-1] in (-1,1):
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be 1, or -1."
+                )
+            
+
+    opt_keys = ("binning", "reconstruction_algorithm", "scanner_length_unit")
+    opt_types = (int, str, str)
+    def_vals = (1, "FDK_CUDA", "mm")
+
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+        if not opt_type is str:  
+            if (not args[-1] > 0):
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+
+        if opt_key in (
+            "scanner_length_unit",
+            "sample_length_unit",
+        ) and not args[-1] in ("m", "cm", "mm"):
+            raise ValueError(
+                "The given value '"
+                + args[-1]
+                + "' of '"
+                + req_key
+                + "' is invalid. It should be 'm', 'cm', or 'mm'."
+            )
+        
+    return dict(zip(req_keys + opt_keys, args))
 
 def generate_sinograms(config_dict):
     """Perform an X-Ray CT scan of a sample and return the sinograms.
@@ -401,46 +499,50 @@ def perform_tomographic_reconstruction(
                                              detector_columns, detector_columns)
 
     """
+    recon_config_dict = check_reconstruction_config_dict(config_dict)
+
     # IMPORTANT: Since we scale everything by the binning parameter when we set
     # up our simulation, we must also scale by the binning parameter here!
 
     # ASTRA toolbox uses clockwise rotation as positive. If the scanner rotates
     # counter clockwise, we need to add a negative sign here.
-    projection_angles = config_dict["sample_rotation_direction"] * np.linspace(
+    projection_angles = recon_config_dict[
+        "sample_rotation_direction"
+    ] * np.linspace(
         0,
-        np.deg2rad(config_dict["scanning_angle"]),
-        config_dict["number_of_projections"],
+        np.deg2rad(recon_config_dict["scanning_angle"]),
+        recon_config_dict["number_of_projections"],
     )
 
     scale_factor = compute_astra_scale_factor(
-        config_dict["distance_source_origin"],
-        config_dict["distance_origin_detector"],
-        config_dict["detector_pixel_size"] * config_dict["binning"],
+        recon_config_dict["distance_source_origin"],
+        recon_config_dict["distance_origin_detector"],
+        recon_config_dict["detector_pixel_size"] * recon_config_dict["binning"],
     )
 
     vol_geo = astra.create_vol_geom(
-        config_dict["detector_columns"] // config_dict["binning"],
-        config_dict["detector_columns"] // config_dict["binning"],
-        config_dict["detector_rows"] // config_dict["binning"],
+        recon_config_dict["detector_columns"] // recon_config_dict["binning"],
+        recon_config_dict["detector_columns"] // recon_config_dict["binning"],
+        recon_config_dict["detector_rows"] // recon_config_dict["binning"],
     )
 
     proj_geo = astra.creators.create_proj_geom(
         "cone",
-        config_dict["detector_pixel_size"]
-        * config_dict["binning"]
+        recon_config_dict["detector_pixel_size"]
+        * recon_config_dict["binning"]
         * scale_factor,
-        config_dict["detector_pixel_size"]
-        * config_dict["binning"]
+        recon_config_dict["detector_pixel_size"]
+        * recon_config_dict["binning"]
         * scale_factor,
-        config_dict["detector_rows"] // config_dict["binning"],
-        config_dict["detector_columns"] // config_dict["binning"],
+        recon_config_dict["detector_rows"] // recon_config_dict["binning"],
+        recon_config_dict["detector_columns"] // recon_config_dict["binning"],
         projection_angles,
-        config_dict["distance_source_origin"] * scale_factor,
-        config_dict["distance_origin_detector"] * scale_factor,
+        recon_config_dict["distance_source_origin"] * scale_factor,
+        recon_config_dict["distance_origin_detector"] * scale_factor,
     )
     proj_id = astra.data3d.create("-sino", proj_geo, data=sinograms)
     rec_id = astra.data3d.create("-vol", vol_geo, data=0)
-    alg_cfg = astra.astra_dict(config_dict["reconstruction_algorithm"])
+    alg_cfg = astra.astra_dict(recon_config_dict["reconstruction_algorithm"])
     alg_cfg["ReconstructionDataId"] = rec_id
     alg_cfg["ProjectionDataId"] = proj_id
     alg_id = astra.algorithm.create(alg_cfg)
@@ -454,7 +556,9 @@ def perform_tomographic_reconstruction(
     reconstruction *= scale_factor
 
     # Since gvxr.getUnitOfLength("mm") returns 1.0 we scale from 1000.
-    unit_scale = 1000 / gvxr.getUnitOfLength(config_dict["scanner_length_unit"])
+    unit_scale = 1000 / gvxr.getUnitOfLength(
+        recon_config_dict["scanner_length_unit"]
+    )
 
     # Rescale to get attenuation coefficient in cm^-1.
     reconstruction *= unit_scale / 100
