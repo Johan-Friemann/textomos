@@ -1,0 +1,75 @@
+{
+    "weft_path": "./tex-ray/meshes/weft.stl",
+    "warp_path": "./tex-ray/meshes/warp.stl",
+    "matrix_path": "./tex-ray/meshes/matrix.stl",
+    "output_path": "./tex-ray/reconstructions/reconstruction.tif",
+
+
+    "cut_matrix": true,
+    "unit_cell_weft_length": 21.5,
+    "unit_cell_warp_length": 6.5,
+    "unit_cell_thickness": 4.0,
+    "weft_yarns_per_layer": 4,
+    "warp_yarns_per_layer": 8,
+    "number_of_yarn_layers": 6,
+    "yarn_width_to_spacing_ratio": 0.9,
+    "weft_to_warp_ratio": 0.4,
+    "weave_pattern": [
+        [1, 0, 1],
+        [3, 0, -1],
+        [5, 1, 1],
+        [7, 1, -1],
+        [3, 2, 1],
+        [1, 2, -1],
+        [7, 3, 1],
+        [5, 3, -1]
+    ],
+    "deform":[
+        10.0, 10.0, 10.0, 0.1, 0.1, 0.1,
+        5.0, 5.0, 10.0, 0.05, 0.05, 0.05
+    ],
+
+
+    "weft_elements": [6],
+    "weft_ratios": [1.0],
+    "weft_density": 1.8,
+    "warp_elements": [6],
+    "warp_ratios": [1.0],
+    "warp_density": 1.8,
+    "matrix_elements": [6, 1, 17, 8],
+    "matrix_ratios": [0.404, 0.481, 0.019, 0.096],
+    "matrix_density": 1.0,
+    "offset": [0.0, 0.0, 12.0],
+    "tilt": [-1.0, 2.0, -3.0],
+    "rot_axis": "x",
+    "tiling": [2, 3, 3],
+    "sample_length_unit": "mm",
+    
+
+    "scanner_length_unit": "mm",
+    "energy_unit": "keV",
+    "detector_pixel_size": 0.03375,
+    "distance_source_origin": 60.0,
+    "distance_origin_detector": 80.0,
+    "detector_rows": 2048,
+    "detector_columns": 2048,
+    "number_of_projections": 801,
+    "scanning_angle": 360.0,
+    "photonic_noise": true,
+    "binning": 4,
+    "threshold": 0.000000001,
+
+
+    "display": true,
+    "anode_angle": 12.0,
+    "tube_voltage": 40.0,
+    "tube_power": 10.0,
+    "filter_thickness": 2.0,
+    "filter_material": "Al",
+    "target_material": "W",
+    "exposure_time": 5.0,
+    "energy_bin_width": 0.5,
+    "num_reference": 20,
+    "reconstruction_algorithm": "FDK_CUDA",
+    "sample_rotation_direction": 1  
+}
