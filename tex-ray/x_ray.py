@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import spekpy as sp
 from gvxrPython3 import gvxr
+import astra
 
 """
 This file contains the main routines for generating sinograms of woven composite
