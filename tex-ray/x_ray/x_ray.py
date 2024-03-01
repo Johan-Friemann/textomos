@@ -266,6 +266,19 @@ def check_xray_config_dict(config_dict):
                 + "' is invalid. It should be 'eV', 'keV', or 'MeV'."
             )
 
+    # Special exception check here since we mix req args and optional args.
+    if (
+        config_dict.get("detector_rows") % config_dict.get("detector_rows", 1)
+        != 0.0
+        or config_dict.get("detector_columns")
+        % config_dict.get("detector_rows", 1)
+        != 0.0
+    ):
+        raise ValueError(
+            "Bad arguments: binning must be a divisor of both the detector "
+            + "rows and the detector columns."
+        )
+
     return dict(zip(req_keys + opt_keys, args))
 
 
@@ -329,7 +342,7 @@ def check_reconstruction_config_dict(config_dict):
                     + "' is invalid. It should be > 0."
                 )
         else:
-            if not args[-1] in (-1,1):
+            if not args[-1] in (-1, 1):
                 raise ValueError(
                     "The given value "
                     + str(args[-1])
@@ -337,7 +350,6 @@ def check_reconstruction_config_dict(config_dict):
                     + req_key
                     + "' is invalid. It should be 1, or -1."
                 )
-            
 
     opt_keys = ("binning", "reconstruction_algorithm", "scanner_length_unit")
     opt_types = (int, str, str)
@@ -355,8 +367,8 @@ def check_reconstruction_config_dict(config_dict):
                 + str(opt_type)
                 + "."
             )
-        if not opt_type is str:  
-            if (not args[-1] > 0):
+        if not opt_type is str:
+            if not args[-1] > 0:
                 raise ValueError(
                     "The given value "
                     + str(args[-1])
@@ -377,7 +389,21 @@ def check_reconstruction_config_dict(config_dict):
                 + "' is invalid. It should be 'm', 'cm', or 'mm'."
             )
         
+    # Special exception check here since we mix req args and optional args.
+    if (
+        config_dict.get("detector_rows") % config_dict.get("detector_rows", 1)
+        != 0.0
+        or config_dict.get("detector_columns")
+        % config_dict.get("detector_rows", 1)
+        != 0.0
+    ):
+        raise ValueError(
+            "Bad arguments: binning must be a divisor of both the detector "
+            + "rows and the detector columns."
+        )
+
     return dict(zip(req_keys + opt_keys, args))
+
 
 def generate_sinograms(config_dict):
     """Perform an X-Ray CT scan of a sample and return the sinograms.
