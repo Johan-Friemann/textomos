@@ -4,6 +4,170 @@ from numpy.random import rand
 from TexGen.Core import *
 
 
+class TextileConfigError(Exception):
+    """Exception raised when missing a required config dictionary entry."""
+
+    pass
+
+
+def check_layer2layer_config_dict(config_dict):
+    """Check that a config dict pertaining a layer2layer unit cell is valid.
+    If invalid an appropriate exception is raised.
+
+     Args:
+         config_dict (dictionary): A dictionary of tex_ray options.
+
+     Keyword args:
+         -
+
+     Returns:
+        layer2layer_dict (dict): A dictionary consisting of relevant layer2layer
+                                 UC generation parameters.
+
+    """
+    args = []
+    req_keys = (
+        "weft_path",
+        "warp_path",
+        "matrix_path",
+        "unit_cell_weft_length",
+        "unit_cell_warp_length",
+        "unit_cell_thickness",
+        "weft_yarns_per_layer",
+        "warp_yarns_per_layer",
+        "number_of_yarn_layers",
+        "yarn_width_to_spacing_ratio",
+        "weft_to_warp_ratio",
+        "weave_pattern",
+    )
+
+    req_types = (
+        str,
+        str,
+        str,
+        float,
+        float,
+        float,
+        int,
+        int,
+        int,
+        float,
+        float,
+        list,
+    )
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise TextileConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+
+        # Special exception raising for weave_pattern, and for paths.
+        if req_key == "weave_pattern":
+            for l in args[-1]:
+                if len(l) != 3:
+                    raise ValueError(
+                        "Each row of 'weave_pattern' must have length 3."
+                    )
+                for i in l:
+                    if not isinstance(i, int):
+                        raise TypeError(
+                            "All entries of 'weave_pattern' must be integers."
+                        )
+                    if l[0] < 0:
+                        raise ValueError(
+                            "The entries in first column of 'weave_pattern' "
+                            + "must >= 0."
+                        )
+                    if l[1] < 0:
+                        raise ValueError(
+                            "The entries in second column of 'weave_pattern' "
+                            + "must >= 0."
+                        )
+                    if l[0] >= config_dict.get("warp_yarns_per_layer"):
+                        raise ValueError(
+                            "The entries in first column of 'weave_pattern' "
+                            + "must < the value of 'warp_yarns_per_layer."
+                        )
+                    if l[1] >= config_dict.get("weft_yarns_per_layer"):
+                        raise ValueError(
+                            "The entries in second column of 'weave_pattern' "
+                            + "must < the value of 'weft_yarns_per_layer'."
+                        )
+                    if not l[2] in (-1, 1):
+                        raise ValueError(
+                            "The entries in the third column of '"
+                            + "weave_pattern' must be either 1 or -1."
+                        )
+        elif not req_key in ["weft_path", "warp_path", "matrix_path"]:
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+            if (  # Two of the entries also have upper bounds.
+                req_key == "yarn_width_to_spacing_ratio"
+                or req_key == "weft_to_warp_ratio"
+            ) and not args[-1] < 1:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be < 1."
+                )
+
+    opt_keys = ("deform", "cut_matrix")
+    def_vals = ([], True)
+    opt_types = (list, bool)
+
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+        if opt_key == "deform":  # Special exception raising for 'deform'
+            if not len(args[-1]) in [0, 12]:
+                raise ValueError("The entry 'deform' must have length 0 or 12.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], float):
+                    raise TypeError("All entries of 'deform' must be floats.")
+                if args[-1][i] < 0.0:
+                    raise ValueError("All entries of 'deform' must >= 0.")
+                if i in [0, 1, 6, 7] and args[-1][i] > 100.0:
+                    raise ValueError(
+                        "All scaling entries (0,1,6, and 7) of 'deform' must "
+                        + " <= 100.0."
+                    )
+
+    return dict(zip(req_keys + opt_keys, args))
+
+
 def create_layer2layer_unit_cell(
     cell_x_size,
     cell_y_size,
@@ -212,14 +376,14 @@ def write_layer_to_layer_unit_cell_mesh(
 
 
 def boolean_difference_post_processing(
-    weft_path, warp_path, matrix_path, cut_matrix=False
+    weft_path, warp_path, matrix_path, cut_matrix
 ):
     """Use PyMeshLab's boolean difference method to cut the warp yarns out of
        the weft yarns to resolve mesh overlap. Therafter the resulting weft and
        warp are cut out from the matrix. This function overwrites the weft (and
        matrix meshes if cut_matrix is True). The matrix_path variable is unused
        when not cutting the yarns out of the matrix (albeit still required for
-       api consistency). 
+       api consistency).
 
     Args:
         weft_path (str): The absolute path (including file name) to the weft
@@ -231,8 +395,9 @@ def boolean_difference_post_processing(
         matrix_path (str): The absolute path (including file name) to the matrix
                            mesh.
 
-    Keyword args:
         cut_matrix (bool): Will cut the weft and warp out of the matrix if True.
+    Keyword args:
+        -
 
     Returns:
         -
@@ -299,6 +464,9 @@ def generate_unit_cell(config_dict):
     """Generate a woven composite unit cell and create a mesh for weft yarns,
     warp yarns, and matrix respectively.
 
+    Users are expected to interact with this function only and not use any
+    of the internals directly.
+
     Args:
         config_dict (dictionary): A dictionary of tex_ray options.
 
@@ -308,36 +476,39 @@ def generate_unit_cell(config_dict):
     Returns:
         -
     """
+
+    layer2layer_config_dict = check_layer2layer_config_dict(config_dict)
+
     Weft, Warp = create_layer2layer_unit_cell(
-        config_dict["unit_cell_weft_length"],
-        config_dict["unit_cell_warp_length"],
-        config_dict["unit_cell_thickness"],
-        config_dict["weft_yarns_per_layer"],
-        config_dict["warp_yarns_per_layer"],
-        config_dict["number_of_yarn_layers"],
-        config_dict["yarn_width_to_spacing_ratio"],
-        config_dict["weft_to_warp_ratio"],
-        config_dict["weave_pattern"],
-        config_dict["deform"],
+        layer2layer_config_dict["unit_cell_weft_length"],
+        layer2layer_config_dict["unit_cell_warp_length"],
+        layer2layer_config_dict["unit_cell_thickness"],
+        layer2layer_config_dict["weft_yarns_per_layer"],
+        layer2layer_config_dict["warp_yarns_per_layer"],
+        layer2layer_config_dict["number_of_yarn_layers"],
+        layer2layer_config_dict["yarn_width_to_spacing_ratio"],
+        layer2layer_config_dict["weft_to_warp_ratio"],
+        layer2layer_config_dict["weave_pattern"],
+        layer2layer_config_dict["deform"],
     )
 
     write_layer_to_layer_unit_cell_mesh(
         Weft,
         Warp,
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
+        layer2layer_config_dict["weft_path"],
+        layer2layer_config_dict["warp_path"],
+        layer2layer_config_dict["matrix_path"],
     )
 
     boolean_difference_post_processing(
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
-        cut_matrix=config_dict["cut_matrix"],
+        layer2layer_config_dict["weft_path"],
+        layer2layer_config_dict["warp_path"],
+        layer2layer_config_dict["matrix_path"],
+        layer2layer_config_dict["cut_matrix"],
     )
 
     set_origin_to_barycenter(
-        config_dict["weft_path"],
-        config_dict["warp_path"],
-        config_dict["matrix_path"],
+        layer2layer_config_dict["weft_path"],
+        layer2layer_config_dict["warp_path"],
+        layer2layer_config_dict["matrix_path"],
     )
