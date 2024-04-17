@@ -20,7 +20,8 @@ extern "C" __global__
 void vox_kernel(const float* triangles, const int num_voxels,
                 const float voxel_size, int* vox
 )
-{
+{   
+    float FLT_EPS = 1e-30;
     int tid = blockIdx.x; //blockIdx.x*blockDim.x + threadIdx.x;
 
     float v1x = triangles[tid*9];
@@ -78,26 +79,37 @@ void vox_kernel(const float* triangles, const int num_voxels,
 
     for(int i = ylo; i < yhi; i++)
     {    
-        if (i < 0 || i > num_voxels - 1)
+        if (i < 0 || i > num_voxels - 1) // Outside y bound; do nothing.
             continue;
         float py = (i + 0.5-num_voxels/2) * voxel_size;
         for(int j = zlo; j < zhi; j++)
         {
-            if (j < 0 || j > num_voxels - 1)
+            if (j < 0 || j > num_voxels - 1) // Outside z bound; do nothing.
                 continue;
             float pz = (j + 0.5-num_voxels/2) * voxel_size;
-            bool test1 = (ne1y*py + ne1z*pz + d1) > 0;
-            bool test2 = (ne2y*py + ne2z*pz + d2) > 0;
-            bool test3 = (ne3y*py + ne3z*pz + d3) > 0;
+
+            // Including rasterization top left test to avoid double counting.
+            bool test1 = (
+                ne1y*py + ne1z*pz + d1 + (ne1y > 0 ? FLT_EPS : 0 )
+                + (ne1y == 0 && ne1z < 0 ? FLT_EPS : 0 )
+            ) > 0;
+            bool test2 = (
+                ne2y*py + ne2z*pz + d2 + (ne2y > 0 ? FLT_EPS : 0 )
+                + (ne2y == 0 && ne2z < 0 ? FLT_EPS : 0 )
+            ) > 0;
+            bool test3 = (
+                ne3y*py + ne3z*pz + d3 + (ne3y > 0 ? FLT_EPS : 0 )
+                + (ne3y == 0 && ne3z < 0 ? FLT_EPS : 0 )
+            ) > 0;
             
             if(test1 && test2 && test3)
             {
                 float px = (v1x + ((v1y - py) * ny + (v1z - pz) * nz) / nx)
                            / voxel_size + num_voxels / 2;
                 int xlo = static_cast <int> (floor(px));
-                if (xlo < 0)
+                if (xlo < 0) // Below x bound; flip all bits in column.
                     xlo = 0;
-                if (xlo > num_voxels - 1)
+                if (xlo > num_voxels - 1) // Above x bound; do nothing.
                     continue;
                 for(int k = xlo; k < num_voxels; k++)
                 {   
