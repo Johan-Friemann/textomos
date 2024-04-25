@@ -268,10 +268,10 @@ def check_xray_config_dict(config_dict):
 
     # Special exception check here since we mix req args and optional args.
     if (
-        config_dict.get("detector_rows") % config_dict.get("detector_rows", 1)
+        config_dict.get("detector_rows") % config_dict.get("binning", 1)
         != 0.0
         or config_dict.get("detector_columns")
-        % config_dict.get("detector_rows", 1)
+        % config_dict.get("binning", 1)
         != 0.0
     ):
         raise ValueError(
