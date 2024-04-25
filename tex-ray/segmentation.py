@@ -15,6 +15,12 @@ Voxelization is performed in parallel on the GPU.
 """
 
 
+class SegmentationConfigError(Exception):
+    """Exception raised when missing a required config dictionary entry."""
+
+    pass
+
+
 def check_segmentation_config_dict(config_dict):
     """Check that a config dict pertaining segmentation is valid.
       If invalid an appropriate exception is raised.
@@ -30,7 +36,155 @@ def check_segmentation_config_dict(config_dict):
                                   segmentation parameters.
 
     """
-    return config_dict
+    args = []
+    req_keys = (
+        "weft_path",
+        "warp_path",
+        "matrix_path",
+        "distance_source_origin",
+        "distance_origin_detector",
+        "detector_columns",
+        "detector_rows",
+        "detector_pixel_size",
+        "rot_axis",
+        "tiling",
+        "offset",
+        "tilt",
+    )
+
+    req_types = (
+        str,
+        str,
+        str,
+        float,
+        float,
+        int,
+        int,
+        float,
+        str,
+        list,
+        list,
+        list,
+    )
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise SegmentationConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+        if not req_type in (str, list):  # All basic numbers should be > 0.
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+        elif req_type is list:
+            if req_key == "tiling":
+                for i in args[-1]:
+                    if not isinstance(i, int):
+                        raise TypeError(
+                            "All entries of '" + req_key + "' must be integers."
+                        )
+                    if not i > 0:
+                        raise ValueError(
+                            "All entries of '" + req_key + "' must > 0."
+                        )
+                if len(args[-1]) != 3:
+                    raise ValueError(
+                        "The entry '" + req_key + "' must have length 3."
+                    )
+            if req_key in ("offset", "tilt"):
+                for d in args[-1]:
+                    if not isinstance(d, float):
+                        raise TypeError(
+                            "All entries of '" + req_key + "' must be floats."
+                        )
+                if len(args[-1]) != 3:
+                    raise ValueError(
+                        "The entry '" + req_key + "' must have length 3."
+                    )
+            if req_key == "rot_axis":
+                if not args[-1] in ("x", "y", "z"):
+                    raise ValueError(
+                        "The entry '"
+                        + args[-1]
+                        + "' of '"
+                        + req_key
+                        + "' is invalid. It should be 'x' ,'y', or 'z'"
+                    )
+
+    opt_keys = (
+        "binning",
+        "scanner_length_unit",
+        "sample_length_unit",
+    )
+    opt_types = (int, str, str)
+    def_vals = (1, "mm", "mm")
+
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+        if not opt_type in (str, bool):  # All basic numbers should be > or >= 0
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+
+        if opt_key in (
+            "scanner_length_unit",
+            "sample_length_unit",
+        ) and not args[-1] in ("m", "cm", "mm"):
+            raise ValueError(
+                "The given value '"
+                + args[-1]
+                + "' of '"
+                + req_key
+                + "' is invalid. It should be 'm', 'cm', or 'mm'."
+            )
+
+    # Special exception check here since we mix req args and optional args.
+    if (
+        config_dict.get("detector_rows") % config_dict.get("binning", 1) != 0.0
+        or config_dict.get("detector_columns") % config_dict.get("binning", 1)
+        != 0.0
+    ):
+        raise ValueError(
+            "Bad arguments: binning must be a divisor of both the detector "
+            + "rows and the detector columns."
+        )
+
+    return dict(zip(req_keys + opt_keys, args))
 
 
 def segment_reconstruction(config_dict):
@@ -56,8 +210,22 @@ def segment_reconstruction(config_dict):
 
     segmentation_config_dict = check_segmentation_config_dict(config_dict)
 
+    if segmentation_config_dict["sample_length_unit"] == "mm":
+        sample_scale_factor = 1e-3
+    elif segmentation_config_dict["sample_length_unit"] == "cm":
+        sample_scale_factor = 1e-2
+    elif segmentation_config_dict["sample_length_unit"] == "m":
+        sample_scale_factor = 1.0
+
+    if segmentation_config_dict["scanner_length_unit"] == "mm":
+        scanner_scale_factor = 1e-3
+    elif segmentation_config_dict["scanner_length_unit"] == "cm":
+        scanner_scale_factor = 1e-2
+    elif segmentation_config_dict["scanner_length_unit"] == "m":
+        scanner_scale_factor = 1.0
+
     tilt = np.array(segmentation_config_dict["tilt"])
-    offset = np.array(segmentation_config_dict["offset"])
+    offset = np.array(segmentation_config_dict["offset"]) * sample_scale_factor
     tiling = segmentation_config_dict["tiling"]
 
     if segmentation_config_dict["rot_axis"] == "x":
@@ -84,6 +252,7 @@ def segment_reconstruction(config_dict):
             segmentation_config_dict["distance_source_origin"]
             + segmentation_config_dict["distance_origin_detector"]
         )
+        * scanner_scale_factor
     )
 
     rot = R.from_rotvec(angle * axis * np.pi / 180)
@@ -101,7 +270,9 @@ def segment_reconstruction(config_dict):
         mesh = meshio.read(path)
         vertex_coords = mesh.points
         connectivity = mesh.cells[0].data
-        triangle = vertex_coords[connectivity].reshape((-1, 3))
+        triangle = (
+            vertex_coords[connectivity].reshape((-1, 3)) * sample_scale_factor
+        )
         triangles.append(triangle)
         num_triangles.append(len(triangle) // 3)
 
@@ -129,7 +300,7 @@ def segment_reconstruction(config_dict):
                         (1,),
                         (
                             gpu_triangles.flatten().astype(cp.float32),
-                            num_voxels,
+                            cp.int32(num_voxels),
                             cp.float64(voxel_size),
                             cp.int32(l + 1),
                             vox,
