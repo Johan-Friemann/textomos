@@ -289,6 +289,7 @@ def segment_reconstruction(config_dict):
                         tile_size[2] * (k - (tiling[2] - 1) / 2),
                     ]
                 )
+                bit_flags = [5, 3, 2] # Results in 5, 6, 7 after kernel bit xor.
                 for l in range(3):
                     shifted_tri = triangles[l] + shift
                     rotated_tri = rot.apply(shifted_tri)
@@ -302,10 +303,10 @@ def segment_reconstruction(config_dict):
                             gpu_triangles.flatten().astype(cp.float32),
                             cp.int32(num_voxels),
                             cp.float64(voxel_size),
-                            cp.int32(l + 1),
+                            cp.int32(bit_flags[l]),
                             vox,
                         ),
                     )
 
-    vox = vox.reshape(num_voxels, num_voxels, num_voxels)
+    vox = vox.reshape(num_voxels, num_voxels, num_voxels) & 3 # Makes it 1, 2, 3
     return vox.get().astype(np.uint8)
