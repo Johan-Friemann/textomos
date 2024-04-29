@@ -7,8 +7,8 @@ from scipy.spatial.transform import Rotation as R
 This file contains the routines for automatic labeling of a woven composite.
 The labeling is carried out through voxelization of the weft, warp, and and
 matrix meshes. Two types of voxelizations can be performed. The first one is
-performed on the meshes in the same sample configuration (including tiling,
-offset etc) as the virtual x-ray scan. The second type contains only one highly
+performed on the meshes in the same sample configuration (including  offset etc)
+as the virtual x-ray scan. The second type contains only one highly
 resolved unit-cell.
 
 Voxelization is performed in parallel on the GPU.
@@ -47,7 +47,6 @@ def check_segmentation_config_dict(config_dict):
         "detector_rows",
         "detector_pixel_size",
         "rot_axis",
-        "tiling",
         "offset",
         "tilt",
     )
@@ -62,7 +61,6 @@ def check_segmentation_config_dict(config_dict):
         int,
         float,
         str,
-        list,
         list,
         list,
     )
@@ -97,20 +95,6 @@ def check_segmentation_config_dict(config_dict):
                     + "' is invalid. It should be > 0."
                 )
         elif req_type is list:
-            if req_key == "tiling":
-                for i in args[-1]:
-                    if not isinstance(i, int):
-                        raise TypeError(
-                            "All entries of '" + req_key + "' must be integers."
-                        )
-                    if not i > 0:
-                        raise ValueError(
-                            "All entries of '" + req_key + "' must > 0."
-                        )
-                if len(args[-1]) != 3:
-                    raise ValueError(
-                        "The entry '" + req_key + "' must have length 3."
-                    )
             if req_key in ("offset", "tilt"):
                 for d in args[-1]:
                     if not isinstance(d, float):
@@ -226,7 +210,6 @@ def segment_reconstruction(config_dict):
 
     tilt = np.array(segmentation_config_dict["tilt"])
     offset = np.array(segmentation_config_dict["offset"]) * sample_scale_factor
-    tiling = segmentation_config_dict["tiling"]
 
     if segmentation_config_dict["rot_axis"] == "x":
         axis = np.array([0, -1, 0])
@@ -276,37 +259,24 @@ def segment_reconstruction(config_dict):
         triangles.append(triangle)
         num_triangles.append(len(triangle) // 3)
 
-    tile_size = np.max(triangles[0], axis=0) - np.min(triangles[0], axis=0)
-
     vox = cp.zeros(num_voxels * num_voxels * num_voxels).astype(cp.int32)
-    for i in range(tiling[0]):
-        for j in range(tiling[1]):
-            for k in range(tiling[2]):
-                shift = np.array(
-                    [
-                        tile_size[0] * (i - (tiling[0] - 1) / 2),
-                        tile_size[1] * (j - (tiling[1] - 1) / 2),
-                        tile_size[2] * (k - (tiling[2] - 1) / 2),
-                    ]
-                )
-                bit_flags = [5, 3, 2] # Results in 5, 6, 7 after kernel bit xor.
-                for l in range(3):
-                    shifted_tri = triangles[l] + shift
-                    rotated_tri = rot.apply(shifted_tri)
-                    tilted_tri = rot_tilt.apply(rotated_tri)
-                    offset_tri = tilted_tri + offset
-                    gpu_triangles = cp.asarray(offset_tri)
-                    vox_kernel(
-                        (num_triangles[l],),
-                        (1,),
-                        (
-                            gpu_triangles.flatten().astype(cp.float32),
-                            cp.int32(num_voxels),
-                            cp.float64(voxel_size),
-                            cp.int32(bit_flags[l]),
-                            vox,
-                        ),
-                    )
+    bit_flags = [5, 3, 2] # Results in 5, 6, 7 after kernel bit xor.
+    for i in range(3):
+        rotated_tri = rot.apply(triangles[i])
+        tilted_tri = rot_tilt.apply(rotated_tri)
+        offset_tri = tilted_tri + offset
+        gpu_triangles = cp.asarray(offset_tri)
+        vox_kernel(
+            (num_triangles[i],),
+            (1,),
+            (
+                gpu_triangles.flatten().astype(cp.float32),
+                cp.int32(num_voxels),
+                cp.float64(voxel_size),
+                cp.int32(bit_flags[i]),
+                vox,
+            ),
+        )
 
     vox = vox.reshape(num_voxels, num_voxels, num_voxels) & 3 # Makes it 1, 2, 3
     return vox.get().astype(np.uint8)

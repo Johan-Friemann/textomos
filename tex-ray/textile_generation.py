@@ -135,9 +135,9 @@ def check_layer2layer_config_dict(config_dict):
                     + "' is invalid. It should be < 1."
                 )
 
-    opt_keys = ("deform", "cut_matrix")
-    def_vals = ([], True)
-    opt_types = (list, bool)
+    opt_keys = ("deform", "tiling", "shift_unit_cell")
+    def_vals = ([], [1, 1, 1], False)
+    opt_types = (list, list, bool)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -164,6 +164,14 @@ def check_layer2layer_config_dict(config_dict):
                         "All scaling entries (0,1,6, and 7) of 'deform' must "
                         + " <= 100.0."
                     )
+        if opt_key == "tiling":
+            if not len(args[-1]) == 3:
+                raise ValueError("The entry 'tiling' must have length 3.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], int):
+                    raise TypeError("All entries of 'tiling' must be ints.")
+                if args[-1][i] < 1:
+                    raise ValueError("All entries of 'deform' must >= 1.")
 
     return dict(zip(req_keys + opt_keys, args))
 
@@ -178,7 +186,9 @@ def create_layer2layer_unit_cell(
     spacing_ratio,
     weft_to_warp_ratio,
     weave_pattern,
+    tiling,
     deform,
+    shift_unit_cell,
 ):
     """Generate a layer to layer fabric unit cell using TexGen.
 
@@ -231,6 +241,11 @@ def create_layer2layer_unit_cell(
                                     10: warp node x displacement (length units)
                                     11: warp node y displacement (length units)
                                     12: warp node z displacement (length units)
+    
+        shift_unit_cell (bool): Will randomly shift the unit cells in the tiling
+                                x- and y-directions (differently for each layer
+                                if applicable).
+ 
     Keyword args:
         -
 
@@ -246,39 +261,79 @@ def create_layer2layer_unit_cell(
     x_yarn_thickness = cell_z_size * weft_to_warp_ratio / (num_layers + 1)
     y_yarn_thickness = cell_z_size * (1.0 - weft_to_warp_ratio) / num_layers
 
-    # Put dummy variable at spacing, since we overwrite it manually.
-    Textile = CTextileWeave3D(num_warp, num_weft, 1.0, cell_z_size)
+    # As the z-tiling is not interlocking we need to layer the textile.
+    LayeredTextile = CTextileLayered()
+    # Pre-allocate the XYZ (they are overwritten in the loop)
+    offset = 0
+    baseline = 0
+    Min = XYZ()
+    Max = XYZ()
+    for i in range(tiling[2]):
+        # Put dummy variable at spacing, since we overwrite it manually.
+        TextileLayer = CTextileWeave3D(
+            num_warp * tiling[0], num_weft * tiling[1], 1.0, cell_z_size
+        )
 
-    Textile.SetXYarnSpacings(x_yarn_spacing)
-    Textile.SetYYarnSpacings(y_yarn_spacing)
-    Textile.SetXYarnHeights(x_yarn_thickness)
-    Textile.SetYYarnHeights(y_yarn_thickness)
-    Textile.SetXYarnWidths(x_yarn_width)
-    Textile.SetYYarnWidths(y_yarn_width)
+        TextileLayer.SetResolution(12)
 
-    for _ in range(num_layers):
-        Textile.AddXLayers()
-        Textile.AddYLayers()
-    # Add one extra to create the top.
-    Textile.AddXLayers()
+        TextileLayer.SetXYarnSpacings(x_yarn_spacing)
+        TextileLayer.SetYYarnSpacings(y_yarn_spacing)
+        TextileLayer.SetXYarnHeights(x_yarn_thickness)
+        TextileLayer.SetYYarnHeights(y_yarn_thickness)
+        TextileLayer.SetXYarnWidths(x_yarn_width)
+        TextileLayer.SetYYarnWidths(y_yarn_width)
 
-    for push in weave_pattern:
-        if push[2] == 1:
-            Textile.PushUp(push[0], push[1])
-        if push[2] == -1:
-            Textile.PushDown(push[0], push[1])
+        for _ in range(num_layers):
+            TextileLayer.AddXLayers()
+            TextileLayer.AddYLayers()
+        # Add one extra to create the top.
+        TextileLayer.AddXLayers()
 
-    Domain = Textile.GetDefaultDomain()
+        # We need to transform from unit cell level to the tiled structure.
+        # We also need to offset the weave from layer to layer if enabled.
+        tiled_weave_pattern = []
+        if shift_unit_cell:
+            x_shift = np.random.randint(0, high=num_warp)
+            y_shift = x_shift = np.random.randint(0, high=num_weft)
+        for j in range(tiling[0]):
+            for k in range(tiling[1]):
+                for push in weave_pattern:
+                    push_tile = [
+                        (push[0] + j * num_warp + x_shift)
+                        % (num_warp * tiling[0]),
+                        (push[1] + k * num_weft + y_shift)
+                        % (num_weft * tiling[1]),
+                        push[2],
+                    ]
+                    tiled_weave_pattern.append(push_tile)
+
+        for push in tiled_weave_pattern:
+            if push[2] == 1:
+                TextileLayer.PushUp(push[0], push[1])
+            if push[2] == -1:
+                TextileLayer.PushDown(push[0], push[1])
+        LayeredTextile.AddLayer(TextileLayer, XYZ(0, 0, offset))
+        Domain = TextileLayer.GetDefaultDomain()
+        Domain.GetBoxLimits(Min, Max)
+        offset += Max.z - Min.z
+        baseline = min(baseline, Min.z)
+
+    DomainPlanes = CDomainPlanes(
+        Min, XYZ(Max.x, Max.y, baseline + offset)
+    )
     Weft = CTextile()
-    Weft.AssignDomain(Domain)
+    Weft.AssignDomain(DomainPlanes)
     Warp = CTextile()
-    Warp.AssignDomain(Domain)
+    Warp.AssignDomain(DomainPlanes)
 
-    for i in range(Textile.GetNumYarns()):
-        Yarn = Textile.GetYarn(i)
+    for i in range(LayeredTextile.GetNumYarns()):
+        Yarn = LayeredTextile.GetYarn(i)
         num_nodes = Yarn.GetNumNodes()
-        # Decide if weft or warp.
-        if i < num_weft * (num_layers + 1):
+        # Decide if weft or warp. Modulo hack due to layering.
+        if i % (
+            num_weft * tiling[1] * (num_layers + 1)
+            + num_warp * tiling[0] * num_layers
+        ) < num_weft * tiling[1] * (num_layers + 1):
             idx = 0
         else:
             idx = 1
@@ -375,15 +430,9 @@ def write_layer_to_layer_unit_cell_mesh(
     matrix_mesh.SaveToSTL(matrix_path, True)
 
 
-def boolean_difference_post_processing(
-    weft_path, warp_path, matrix_path, cut_matrix
-):
+def boolean_difference_post_processing(weft_path, warp_path):
     """Use PyMeshLab's boolean difference method to cut the warp yarns out of
-       the weft yarns to resolve mesh overlap. Therafter the resulting weft and
-       warp are cut out from the matrix. This function overwrites the weft (and
-       matrix meshes if cut_matrix is True). The matrix_path variable is unused
-       when not cutting the yarns out of the matrix (albeit still required for
-       api consistency).
+       the weft yarns to resolve mesh overlap.
 
     Args:
         weft_path (str): The absolute path (including file name) to the weft
@@ -392,10 +441,7 @@ def boolean_difference_post_processing(
         warp_path (str): The absolute path (including file name) to the warp
                          mesh.
 
-        matrix_path (str): The absolute path (including file name) to the matrix
-                           mesh.
 
-        cut_matrix (bool): Will cut the weft and warp out of the matrix if True.
     Keyword args:
         -
 
@@ -405,13 +451,8 @@ def boolean_difference_post_processing(
     mesh_set = pml.MeshSet()
     mesh_set.load_new_mesh(warp_path)
     mesh_set.load_new_mesh(weft_path)
-    mesh_set.load_new_mesh(matrix_path)
     mesh_set.generate_boolean_difference(first_mesh=1, second_mesh=0)
     mesh_set.save_current_mesh(weft_path)
-    if cut_matrix:
-        mesh_set.generate_boolean_union(first_mesh=1, second_mesh=0)
-        mesh_set.generate_boolean_difference(first_mesh=2, second_mesh=4)
-        mesh_set.save_current_mesh(matrix_path)
 
 
 def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
@@ -489,7 +530,9 @@ def generate_unit_cell(config_dict):
         layer2layer_config_dict["yarn_width_to_spacing_ratio"],
         layer2layer_config_dict["weft_to_warp_ratio"],
         layer2layer_config_dict["weave_pattern"],
+        layer2layer_config_dict["tiling"],
         layer2layer_config_dict["deform"],
+        layer2layer_config_dict["shift_unit_cell"],
     )
 
     write_layer_to_layer_unit_cell_mesh(
@@ -503,8 +546,6 @@ def generate_unit_cell(config_dict):
     boolean_difference_post_processing(
         layer2layer_config_dict["weft_path"],
         layer2layer_config_dict["warp_path"],
-        layer2layer_config_dict["matrix_path"],
-        layer2layer_config_dict["cut_matrix"],
     )
 
     set_origin_to_barycenter(
