@@ -62,7 +62,6 @@ def check_xray_config_dict(config_dict):
         "tube_power",
         "exposure_time",
         "rot_axis",
-        "tiling",
         "offset",
         "tilt",
         "number_of_projections",
@@ -93,7 +92,6 @@ def check_xray_config_dict(config_dict):
         float,
         float,
         str,
-        list,
         list,
         list,
         int,
@@ -162,20 +160,6 @@ def check_xray_config_dict(config_dict):
                         + "' must equal the length of '"
                         + req_key.replace("ratios", "elements")
                         + "'."
-                    )
-            if req_key == "tiling":
-                for i in args[-1]:
-                    if not isinstance(i, int):
-                        raise TypeError(
-                            "All entries of '" + req_key + "' must be integers."
-                        )
-                    if not i > 0:
-                        raise ValueError(
-                            "All entries of '" + req_key + "' must > 0."
-                        )
-                if len(args[-1]) != 3:
-                    raise ValueError(
-                        "The entry '" + req_key + "' must have length 3."
                     )
             if req_key in ("offset", "tilt"):
                 for d in args[-1]:
@@ -479,7 +463,6 @@ def set_up_sample(
     matrix_ratios,
     matrix_density,
     rot_axis,
-    tiling,
     offset,
     tilt,
     length_unit="m",
@@ -526,15 +509,9 @@ def set_up_sample(
                         i.e the axis that should point upwards in the global
                         coordinates. It can be "x", "y", or "z".
 
-        tiling (list[int]): A list of length 3 that represents the tiling
-                            pattern in the sample's local coordinates. Ex:
-                            [2,3,3] will tile two cells in x and 3 in y and z.
-                            [1,1,1] will result in no tiling (original sample).
-
         offset (list[float]): A list of length 3 that represent the sample
                               offset in global coordinates, measured from the
-                              center of the sample (center of tiling).
-                              [0,0,0] results in no offset.
+                              center of the sample. [0,0,0] results in 0 offset.
 
         tilt (list[float]): A list of length 3 that represents a rotation.
                             The magnitude of the vector is the angle and the
@@ -572,90 +549,39 @@ def set_up_sample(
     offset = rot.apply(rot_tilt.apply(offset))
 
     # Turn inputs into lists for use in zipped loops.
-    root_names = ["matrix_000", "weft_000", "warp_000"]
+    names = ["matrix", "weft", "warp"]
     paths = [matrix_path, weft_path, warp_path]
     elements = [matrix_elements, weft_elements, warp_elements]
     ratios = [matrix_ratios, weft_ratios, warp_ratios]
     densities = [matrix_density, weft_density, warp_density]
-    tile_size = [0, 0, 0]
 
     # We load files for the first occurences here in order to load only once.
-    for root_name, path, element, ratio, density in zip(
-        root_names, paths, elements, ratios, densities
+    for name, path, element, ratio, density in zip(
+        names, paths, elements, ratios, densities
     ):
-        gvxr.loadMeshFile(root_name, path, length_unit, True)
-        gvxr.setMixture(root_name, element, ratio)
-        gvxr.setDensity(root_name, density, "g/cm3")
-        # We need to align the tiling to the matrix bounding box.
-        if root_name == "matrix_000":
-            bbox = gvxr.getNodeOnlyBoundingBox(root_name, length_unit)
-            tile_size[0] = bbox[3] - bbox[0]
-            tile_size[1] = bbox[4] - bbox[1]
-            tile_size[2] = bbox[5] - bbox[2]
+        gvxr.loadMeshFile(name, path, length_unit, False)
+        if name == "matrix":
+            gvxr.addPolygonMeshAsOuterSurface(name)
+        else:
+            gvxr.addPolygonMeshAsInnerSurface(name)
+        gvxr.setMixture(name, element, ratio)
+        gvxr.setDensity(name, density, "g/cm3")
+
         # We must rotate before we translate since the translation
         # does not translate the axis of rotation.
-        gvxr.rotateNode(root_name, angle, axis[0], axis[1], axis[2])
+        gvxr.rotateNode(name, angle, axis[0], axis[1], axis[2])
         # results in crazy behavior in gvxr if 0.
         if np.any(tilt):
             gvxr.rotateNode(
-                root_name,
+                name,
                 tilt_angle,
                 tilt_axis[0],
                 tilt_axis[1],
                 tilt_axis[2],
             )
         gvxr.translateNode(
-            root_name,
-            -tile_size[0] * (tiling[0] - 1) / 2 + offset[0],
-            -tile_size[1] * (tiling[1] - 1) / 2 + offset[1],
-            -tile_size[2] * (tiling[2] - 1) / 2 + offset[2],
-            length_unit,
+            name, offset[0], offset[1], offset[2], length_unit,
         )
-
-    # Once mesh files are loaded we can keep re-using them for the tiling.
-    for i in range(tiling[0]):
-        for j in range(tiling[1]):
-            for k in range(tiling[2]):
-                # This is a hack so we skip the first one.
-                if i == 0 and j == 0 and k == 0:
-                    continue
-                names = [
-                    "matrix_" + str(i) + str(j) + str(k),
-                    "weft_" + str(i) + str(j) + str(k),
-                    "warp_" + str(i) + str(j) + str(k),
-                ]
-
-                for name, root_name, element, ratio, density in zip(
-                    names, root_names, elements, ratios, densities
-                ):
-                    gvxr.emptyMesh(name)
-                    gvxr.addMesh(name, root_name)
-                    gvxr.addPolygonMeshAsInnerSurface(name)
-                    gvxr.setMixture(name, element, ratio)
-                    gvxr.setDensity(name, density, "g/cm3")
-                    gvxr.rotateNode(
-                        name,
-                        angle,
-                        axis[0],
-                        axis[1],
-                        axis[2],
-                    )
-                    # results in crazy behavior in gvxr if 0.
-                    if np.any(tilt):
-                        gvxr.rotateNode(
-                            name,
-                            tilt_angle,
-                            tilt_axis[0],
-                            tilt_axis[1],
-                            tilt_axis[2],
-                        )
-                    gvxr.translateNode(
-                        name,
-                        tile_size[0] * (i - (tiling[0] - 1) / 2) + offset[0],
-                        tile_size[1] * (j - (tiling[1] - 1) / 2) + offset[1],
-                        tile_size[2] * (k - (tiling[2] - 1) / 2) + offset[2],
-                        length_unit,
-                    )
 
 
 def add_photonic_noise(noise_free_projection, integrate_energy=True):
@@ -960,7 +886,6 @@ def generate_sinograms(config_dict):
         xray_config_dict["matrix_ratios"],
         xray_config_dict["matrix_density"],
         xray_config_dict["rot_axis"],
-        xray_config_dict["tiling"],
         xray_config_dict["offset"],
         xray_config_dict["tilt"],
         length_unit=xray_config_dict["sample_length_unit"],
