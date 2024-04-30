@@ -19,6 +19,7 @@ RUN apt update && apt upgrade -y && \
 
 # Build base functionality of TexGen.
 # First sed fixes lower/upper case bug, second sed hard-mutes TexGen logger...
+# unistd.h is removed as it is not used on Linux systems and causes an error.
 RUN mkdir TexGen-install && mkdir stl-files && \
     git clone https://github.com/louisepb/TexGen.git && \
     cd TexGen && mkdir bin && cd bin && \
