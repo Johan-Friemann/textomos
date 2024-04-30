@@ -135,9 +135,9 @@ def check_layer2layer_config_dict(config_dict):
                     + "' is invalid. It should be < 1."
                 )
 
-    opt_keys = ("deform", "tiling", "shift_unit_cell")
-    def_vals = ([], [1, 1, 1], False)
-    opt_types = (list, list, bool)
+    opt_keys = ("deform", "tiling", "shift_unit_cell", "textile_resolution")
+    def_vals = ([], [1, 1, 1], False, 20)
+    opt_types = (list, list, bool, int)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -151,6 +151,11 @@ def check_layer2layer_config_dict(config_dict):
                 + str(opt_type)
                 + "."
             )
+
+        if opt_key == "textile_resolution":
+            if args[-1] < 1:
+                raise ValueError("The entry 'textile_resolution' must >= 1.")
+
         if opt_key == "deform":  # Special exception raising for 'deform'
             if not len(args[-1]) in [0, 12]:
                 raise ValueError("The entry 'deform' must have length 0 or 12.")
@@ -189,6 +194,7 @@ def create_layer2layer_unit_cell(
     tiling,
     deform,
     shift_unit_cell,
+    textile_resolution,
 ):
     """Generate a layer to layer fabric unit cell using TexGen.
 
@@ -245,6 +251,12 @@ def create_layer2layer_unit_cell(
         shift_unit_cell (bool): Will randomly shift the unit cells in the tiling
                                 x- and y-directions (differently for each layer
                                 if applicable).
+
+        textile_resolution (int): Sets the number of mesh nodes around a yarn
+                                  cross section. Number of nodes along the yarn
+                                  direction is calculated such that the nodal
+                                  distance is the same as between the cross
+                                  section nodes.
  
     Keyword args:
         -
@@ -274,7 +286,7 @@ def create_layer2layer_unit_cell(
             num_warp * tiling[0], num_weft * tiling[1], 1.0, cell_z_size
         )
 
-        TextileLayer.SetResolution(12)
+        TextileLayer.SetResolution(textile_resolution)
 
         TextileLayer.SetXYarnSpacings(x_yarn_spacing)
         TextileLayer.SetYYarnSpacings(y_yarn_spacing)
@@ -533,6 +545,7 @@ def generate_unit_cell(config_dict):
         layer2layer_config_dict["tiling"],
         layer2layer_config_dict["deform"],
         layer2layer_config_dict["shift_unit_cell"],
+        layer2layer_config_dict["textile_resolution"]
     )
 
     write_layer_to_layer_unit_cell_mesh(
