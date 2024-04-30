@@ -22,6 +22,7 @@ RUN mkdir TexGen-install && mkdir stl-files && \
     git clone https://github.com/louisepb/TexGen.git && \
     cd TexGen && mkdir bin && cd bin && \
     sed -i 's@%include \"../core/PrismVoxelMesh.h\"@%include \"../Core/PrismVoxelMesh.h\"@g' ../Python/Core.i && \
+    sed -i '55,58d' ../Core/Logger.cpp && \
     rm ../OctreeRefinement/include/unistd.h && \
     cp ../OctreeRefinement/*.so /TexGen-install/ && \
     cmake -DCMAKE_INSTALL_PREFIX:STRING=/TexGen-install \
@@ -45,12 +46,12 @@ RUN cd TexGen/bin && \
     make && make install
 
 # Clean up!
-RUN rm -rf TexGen
+#RUN rm -rf TexGen
 
 # Install python packages.
 RUN pip3 install git+https://bitbucket.org/spekpy/spekpy_release.git \
         numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr torch \
-        stl-to-voxel meshio pymeshlab olefile 
+        cupy-cuda12x meshio pymeshlab olefile scikit-image
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
