@@ -259,18 +259,18 @@ def segment_reconstruction(config_dict):
         triangles.append(triangle)
         num_triangles.append(len(triangle) // 3)
 
-    vox = cp.zeros(num_voxels * num_voxels * num_voxels).astype(cp.int32)
+    vox = cp.zeros(num_voxels * num_voxels * num_voxels, dtype=cp.int32)
     bit_flags = [5, 3, 2] # Results in 5, 6, 7 after kernel bit xor.
     for i in range(3):
         rotated_tri = rot.apply(triangles[i])
         tilted_tri = rot_tilt.apply(rotated_tri)
-        offset_tri = tilted_tri + offset
-        gpu_triangles = cp.asarray(offset_tri)
+        offset_tri = (tilted_tri + offset).flatten() # Flatten here, not on gpu.
+        gpu_triangles = cp.asarray(offset_tri, dtype=cp.float32)
         vox_kernel(
             (num_triangles[i],),
             (1,),
             (
-                gpu_triangles.flatten().astype(cp.float32),
+                gpu_triangles,
                 cp.int32(num_voxels),
                 cp.float64(voxel_size),
                 cp.int32(bit_flags[i]),
