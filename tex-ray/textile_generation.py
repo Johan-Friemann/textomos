@@ -36,7 +36,8 @@ def check_layer2layer_config_dict(config_dict):
         "weft_yarns_per_layer",
         "warp_yarns_per_layer",
         "number_of_yarn_layers",
-        "yarn_width_to_spacing_ratio",
+        "weft_width_to_spacing_ratio",
+        "warp_width_to_spacing_ratio",
         "weft_to_warp_ratio",
         "weave_pattern",
     )
@@ -51,6 +52,7 @@ def check_layer2layer_config_dict(config_dict):
         int,
         int,
         int,
+        float,
         float,
         float,
         list,
@@ -124,7 +126,8 @@ def check_layer2layer_config_dict(config_dict):
                     + "' is invalid. It should be > 0."
                 )
             if (  # Two of the entries also have upper bounds.
-                req_key == "yarn_width_to_spacing_ratio"
+                req_key == "weft_width_to_spacing_ratio"
+                or req_key == "warp_width_to_spacing_ratio"
                 or req_key == "weft_to_warp_ratio"
             ) and not args[-1] < 1:
                 raise ValueError(
@@ -188,7 +191,8 @@ def create_layer2layer_sample(
     num_weft,
     num_warp,
     num_layers,
-    spacing_ratio,
+    weft_spacing_ratio,
+    warp_spacing_ratio,
     weft_to_warp_ratio,
     weave_pattern,
     tiling,
@@ -214,9 +218,15 @@ def create_layer2layer_sample(
         num_layers (int): The number of layers (weft yarns have one additional
                          layer) (per unit cell).
 
-        yarn_width_to_spacing_ratio (float): A number between 0 and 1 that
-                                             determines how wide the yarns are
-                                             in relation to the yarn spacing.
+        weft_width_to_spacing_ratio (float): A number between 0 and 1 that
+                                             determines how wide the weft yarns
+                                             are in relation to the yarn
+                                             spacing.
+
+        warp_width_to_spacing_ratio (float): A number between 0 and 1 that
+                                             determines how wide the warp yarns
+                                             are in relation to the yarn
+                                             spacing.
 
         weft_to_warp_ratio (float): A number between 0 and 1 that determines how
                                    thick weft yarns are in relation to the warp
@@ -276,8 +286,8 @@ def create_layer2layer_sample(
     """
     x_yarn_spacing = cell_y_size / num_weft
     y_yarn_spacing = cell_x_size / num_warp
-    x_yarn_width = x_yarn_spacing * spacing_ratio
-    y_yarn_width = y_yarn_spacing * spacing_ratio
+    x_yarn_width = x_yarn_spacing * weft_spacing_ratio
+    y_yarn_width = y_yarn_spacing * warp_spacing_ratio
     x_yarn_thickness = cell_z_size * weft_to_warp_ratio / (num_layers + 1)
     y_yarn_thickness = cell_z_size * (1.0 - weft_to_warp_ratio) / num_layers
 
@@ -547,7 +557,8 @@ def generate_woven_composite_sample(config_dict):
         layer2layer_config_dict["weft_yarns_per_layer"],
         layer2layer_config_dict["warp_yarns_per_layer"],
         layer2layer_config_dict["number_of_yarn_layers"],
-        layer2layer_config_dict["yarn_width_to_spacing_ratio"],
+        layer2layer_config_dict["weft_width_to_spacing_ratio"],
+        layer2layer_config_dict["warp_width_to_spacing_ratio"],
         layer2layer_config_dict["weft_to_warp_ratio"],
         layer2layer_config_dict["weave_pattern"],
         layer2layer_config_dict["tiling"],
