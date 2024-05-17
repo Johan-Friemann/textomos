@@ -13,7 +13,8 @@
     "weft_yarns_per_layer": 4,
     "warp_yarns_per_layer": 8,
     "number_of_yarn_layers": 6,
-    "yarn_width_to_spacing_ratio": 0.9,
+    "weft_width_to_spacing_ratio": 0.98,
+    "warp_width_to_spacing_ratio": 0.9,
     "weft_to_warp_ratio": 0.4,
     "weave_pattern": [
         [1, 0, 1],
