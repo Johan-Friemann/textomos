@@ -1,3 +1,4 @@
+from multiprocessing import Process, Queue
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import spekpy as sp
@@ -252,10 +253,8 @@ def check_xray_config_dict(config_dict):
 
     # Special exception check here since we mix req args and optional args.
     if (
-        config_dict.get("detector_rows") % config_dict.get("binning", 1)
-        != 0.0
-        or config_dict.get("detector_columns")
-        % config_dict.get("binning", 1)
+        config_dict.get("detector_rows") % config_dict.get("binning", 1) != 0.0
+        or config_dict.get("detector_columns") % config_dict.get("binning", 1)
         != 0.0
     ):
         raise ValueError(
@@ -580,7 +579,11 @@ def set_up_sample(
                 tilt_axis[2],
             )
         gvxr.translateNode(
-            name, offset[0], offset[1], offset[2], length_unit,
+            name,
+            offset[0],
+            offset[1],
+            offset[2],
+            length_unit,
         )
 
 
@@ -821,20 +824,19 @@ def neg_log_transform(corrected_projections, threshold):
     return neg_log_projections
 
 
-def generate_sinograms(config_dict):
-    """Perform an X-Ray CT scan of a sample and return the sinograms.
+def _generate_sinograms(config_dict, queue):
+    """Perform an X-Ray CT scan of a sample. Do not use this function directly,
+    please use generate_sinograms instead.
 
     Args:
         config_dict (dictionary): A dictionary of tex_ray options.
+        queue (Queue): A queue that allows reading data from a process.
 
     Keyword args:
         -
     Returns:
-        sinograms (numpy array[float]): The measured CT sinograms. The array has
-                                        the shape (detector_rows,
-                                        number_of_projections, detector_columns)
+        -
     """
-
     xray_config_dict = check_xray_config_dict(config_dict)
 
     gvxr.createOpenGLContext()
@@ -914,4 +916,36 @@ def generate_sinograms(config_dict):
     # Reformat the projections into a set of sinograms on the ASTRA form.
     sinograms = np.swapaxes(neg_log_projections, 0, 1)
 
+    queue.put(sinograms)
+
+
+def generate_sinograms(config_dict):
+    """Perform an X-Ray CT scan of a sample and return the sinograms.
+
+    This function wraps _generate_sinograms. This construction is needed for
+    multiple sequential simulations due to the nature of the gvxr singleton.
+    A new process must be spawned for each simulation to avoid loading into
+    the previous simulation.
+
+    Args:
+        config_dict (dictionary): A dictionary of tex_ray options.
+
+    Keyword args:
+        -
+    Returns:
+        sinograms (numpy array[float]): The measured CT sinograms. The array has
+                                        the shape (detector_rows,
+                                        number_of_projections, detector_columns)
+    """
+    q = Queue()
+    p = Process(
+        target=_generate_sinograms,
+        args=(
+            config_dict,
+            q,
+        ),
+    )
+    p.start()
+    sinograms = q.get()
+    p.join()
     return sinograms
