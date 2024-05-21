@@ -1,9 +1,9 @@
 import os
 import copy
-
-from multiprocessing import Process
+import signal
 import time
-
+import sys
+from multiprocessing import Process
 import numpy as np
 import random
 import tifffile
@@ -13,6 +13,14 @@ from tomographic_reconstruction import perform_tomographic_reconstruction
 from textile_generation import generate_woven_composite_sample
 from segmentation import segment_reconstruction
 from hdf5_utils import save_data
+
+
+"""
+This files contains routines for running several simulations in batches
+(including domain randomization). Data will be added to a database based on
+hdf5 files. If a database already exists data is appended, otherwise the
+database is created.
+"""
 
 
 def generate_weave_pattern(
@@ -211,6 +219,9 @@ def generate_woven_composite_sample_batch(
 
         exit_codes (list[int]): The generation process exit codes, 0 is success.
     """
+    # Ignore sigint in children
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     configs = []
     jobs = []
     exit_codes = []
@@ -222,10 +233,23 @@ def generate_woven_composite_sample_batch(
         job.start()
         jobs.append(job)
 
-    for job in jobs:
-        job.join()
-        exit_codes.append(job.exitcode)
-        job.close()
+    # Let parent deal with sigint
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    try:
+        for job in jobs:
+            job.join()
+            exit_codes.append(job.exitcode)
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt, terminating all processes!")
+        for job in jobs:
+            job.terminate()
+            job.join()
+            job.close()
+        clean_up_batch_files(num_samples)
+        sys.exit(0)
+    else: # Need this since if we close process in try we crash in except.
+        for job in jobs:
+            job.close()
 
     return configs, exit_codes
 
@@ -243,56 +267,80 @@ def clean_up_batch_files(num_samples):
         -
     """
     base_path = __file__.rstrip("batch_run.py")
+    phases = ["weft", "warp", "matrix"]
     for sim_id in range(num_process):
-        weft_path = os.path.join(
-            base_path, "meshes/weft_" + str(sim_id) + ".stl"
-        )
-        if os.path.exists(weft_path):
-            os.remove(weft_path)
+        for phase in phases:
+            path = os.path.join(
+                base_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
+            )
+            if os.path.exists(path):
+                os.remove(path)
 
-        warp_path = os.path.join(
-            base_path, "meshes/warp_" + str(sim_id) + ".stl"
+        path = os.path.join(
+            base_path,
+            "reconstructions/" + "reconstruction_" + str(sim_id) + ".tiff",
         )
-        if os.path.exists(warp_path):
-            os.remove(warp_path)
-
-        matrix_path = os.path.join(
-            base_path, "meshes/matrix_" + str(sim_id) + ".stl"
+        if os.path.exists(path):
+            os.remove(path)
+        path = os.path.join(
+            base_path,
+            "segmentations/" + "segmentation_" + str(sim_id) + ".tiff",
         )
-        if os.path.exists(matrix_path):
-            os.remove(matrix_path)
+        if os.path.exists(path):
+            os.remove(path)
 
 
 if __name__ == "__main__":
+    num_process = 2
+    domain_randomization = 0.2
+    data_base_path = "./tex-ray/dbase"
+
     with open("./tex-ray/input/default_input.json") as f:
         master_config = json.load(f)
 
-    num_process = 5
-    domain_randomization = 0.2
+    while True:
+        t0 = time.time()
+        print(
+            "\nStarting to process a batch of size " + str(num_process) + "."
+        )
+        config_dicts, exit_codes = generate_woven_composite_sample_batch(
+            num_process, master_config, domain_randomization
+        )
 
-    t0 = time.time()
-    config_dicts, exit_codes = generate_woven_composite_sample_batch(
-        num_process, master_config, domain_randomization
-    )
-    t1 = time.time()
-    print("TIME: ", t1 - t0)
+        try:
+            for exit_code, sim_id in zip(exit_codes, range(num_process)):
+                if exit_code == 0:
+                    sinograms = generate_sinograms(config_dicts[sim_id])
+                    reconstruction = perform_tomographic_reconstruction(
+                        sinograms, config_dicts[sim_id]
+                    )
+                    tifffile.imwrite(
+                        config_dicts[sim_id]["reconstruction_output_path"],
+                        reconstruction,
+                    )
+                    del sinograms, reconstruction
 
-    for exit_code, sim_id in zip(exit_codes, range(num_process)):
-        if exit_code == 0:
-            sinograms = generate_sinograms(config_dicts[sim_id])
-            reconstruction = perform_tomographic_reconstruction(
-                sinograms, config_dicts[sim_id]
+                    segmentation = segment_reconstruction(config_dicts[sim_id])
+                    tifffile.imwrite(
+                        config_dicts[sim_id]["segmentation_output_path"],
+                        segmentation,
+                    )
+                    del segmentation
+                    save_data(data_base_path, config_dicts[sim_id])
+        except KeyboardInterrupt:
+            print("\nKeyboard interrupt, terminating all processes!")
+            clean_up_batch_files(num_process)
+            sys.exit(0)
+        else:
+            clean_up_batch_files(num_process)
+            t1 = time.time()
+            print(
+                "\nFinished processing a batch of size "
+                + str(num_process)
+                + "."
             )
-            tifffile.imwrite(
-                config_dicts[sim_id]["reconstruction_output_path"],
-                reconstruction,
+            print(
+                "\nAverage time per sample: "
+                + str((t1 - t0) / num_process)
+                + " s."
             )
-            del sinograms, reconstruction
-
-            segmentation = segment_reconstruction(config_dicts[sim_id])
-            tifffile.imwrite(
-                config_dicts[sim_id]["segmentation_output_path"], segmentation
-            )
-            del segmentation
-
-    clean_up_batch_files(num_process)   
