@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation as R
 import spekpy as sp
 from gvxrPython3 import gvxr
 
+
 """
 This file contains the main routines for generating sinograms of woven composite
 material meshes.
@@ -306,6 +307,7 @@ def set_up_detector(
         detector_pixel_size * binning,
         length_unit,
     )
+    return None
 
 
 def generate_xray_spectrum(
@@ -446,6 +448,7 @@ def set_up_xray_source(
     else:
         for energy, count in zip(energies, counts):
             gvxr.addEnergyBinToSpectrum(energy, energy_unit, count)
+    return None
 
 
 def set_up_sample(
@@ -585,6 +588,7 @@ def set_up_sample(
             offset[2],
             length_unit,
         )
+    return None
 
 
 def add_photonic_noise(noise_free_projection, integrate_energy=True):
@@ -917,6 +921,7 @@ def _generate_sinograms(config_dict, queue):
     sinograms = np.swapaxes(neg_log_projections, 0, 1)
 
     queue.put(sinograms)
+    return None
 
 
 def generate_sinograms(config_dict):
@@ -937,7 +942,7 @@ def generate_sinograms(config_dict):
                                         the shape (detector_rows,
                                         number_of_projections, detector_columns)
     """
-    q = Queue()
+    q = Queue(1)
     p = Process(
         target=_generate_sinograms,
         args=(
@@ -948,4 +953,8 @@ def generate_sinograms(config_dict):
     p.start()
     sinograms = q.get()
     p.join()
+    p.close()
+    q.close()
+    q.join_thread()
+
     return sinograms
