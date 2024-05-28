@@ -265,7 +265,7 @@ def create_layer2layer_sample(
                                     10: warp node x displacement (length units)
                                     11: warp node y displacement (length units)
                                     12: warp node z displacement (length units)
-    
+
         shift_unit_cell (bool): Will randomly shift the unit cells in the tiling
                                 x- and y-directions (differently for each layer,
                                 the z-direction, if applicable).
@@ -275,7 +275,7 @@ def create_layer2layer_sample(
                                   direction is calculated such that the nodal
                                   distance is the same as between the cross
                                   section nodes.
- 
+
     Keyword args:
         -
 
@@ -348,9 +348,7 @@ def create_layer2layer_sample(
         offset += Max.z - Min.z
         baseline = min(baseline, Min.z)
 
-    DomainPlanes = CDomainPlanes(
-        Min, XYZ(Max.x, Max.y, baseline + offset)
-    )
+    DomainPlanes = CDomainPlanes(Min, XYZ(Max.x, Max.y, baseline + offset))
     Weft = CTextile()
     Weft.AssignDomain(DomainPlanes)
     Warp = CTextile()
@@ -458,6 +456,7 @@ def write_layer_to_layer_sample_mesh(
     weft_mesh.SaveToSTL(weft_path, True)
     warp_mesh.SaveToSTL(warp_path, True)
     matrix_mesh.SaveToSTL(matrix_path, True)
+    return None
 
 
 def boolean_difference_post_processing(weft_path, warp_path):
@@ -483,6 +482,7 @@ def boolean_difference_post_processing(weft_path, warp_path):
     mesh_set.load_new_mesh(weft_path)
     mesh_set.generate_boolean_difference(first_mesh=1, second_mesh=0)
     mesh_set.save_current_mesh(weft_path)
+    return None
 
 
 def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
@@ -529,6 +529,7 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
         traslmethod="Set new Origin", neworigin=barycenter
     )
     mesh_set.save_current_mesh(warp_path)
+    return None
 
 
 def generate_woven_composite_sample(config_dict):
@@ -564,7 +565,7 @@ def generate_woven_composite_sample(config_dict):
         layer2layer_config_dict["tiling"],
         layer2layer_config_dict["deform"],
         layer2layer_config_dict["shift_unit_cell"],
-        layer2layer_config_dict["textile_resolution"]
+        layer2layer_config_dict["textile_resolution"],
     )
 
     write_layer_to_layer_sample_mesh(
@@ -585,3 +586,4 @@ def generate_woven_composite_sample(config_dict):
         layer2layer_config_dict["warp_path"],
         layer2layer_config_dict["matrix_path"],
     )
+    return None
