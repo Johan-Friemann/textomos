@@ -116,6 +116,9 @@ def generate_config_dict(
         "segmentations/" + "segmentation_" + str(sim_id) + ".tiff",
     )
 
+    if domain_randomization == 0.0:
+        return config_dict
+
     bounded_floats = [
         "weft_width_to_spacing_ratio",
         "warp_width_to_spacing_ratio",
@@ -247,9 +250,9 @@ def generate_woven_composite_sample_batch(
             job.close()
         clean_up_batch_files(num_samples)
         sys.exit(0)
-    else: # Need this since if we close process in try we crash in except.
-        for job in jobs:
-            job.close()
+
+    for job in jobs:
+        job.close()
 
     return configs, exit_codes
 
@@ -268,7 +271,7 @@ def clean_up_batch_files(num_samples):
     """
     base_path = __file__.rstrip("batch_run.py")
     phases = ["weft", "warp", "matrix"]
-    for sim_id in range(num_process):
+    for sim_id in range(num_samples):
         for phase in phases:
             path = os.path.join(
                 base_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
@@ -288,59 +291,104 @@ def clean_up_batch_files(num_samples):
         )
         if os.path.exists(path):
             os.remove(path)
+    return None
+
+
+def run_batch(
+    master_config, data_base_path, num_process=1, domain_randomization=0.0
+):
+    """Run a batch of tex-ray simulations based on a config dictionary, and
+    store the results in a hdf5 database.
+
+    Args:
+        master_config (dict): A valid Tex-Ray config dict that will be used as
+                              the template for generating the configuration
+                              dict.
+
+        data_base_path (str): The path to the hdf5 database folder. If it does
+                              not exist it is created.
+
+    Keyword args:
+        num_process (int): The number of processes to run in the batch. Decides
+                           the number of samples that is produced per batch.
+
+        domain_randomization (float): A number between 0.0 and 1.0 that
+                                      determines the rpercentual domain
+                                      randomization to be applied to the sample.
+    Returns:
+        -
+    """
+    print("\nStarting to process a batch of size " + str(num_process) + ".")
+    t0 = time.time()
+
+    config_dicts, exit_codes = generate_woven_composite_sample_batch(
+        num_process, master_config, domain_randomization
+    )
+
+    num_success = 0
+    try:
+        for exit_code, sim_id in zip(exit_codes, range(num_process)):
+            if exit_code == 0:
+                num_success += 1
+                sinograms = generate_sinograms(config_dicts[sim_id])
+                reconstruction = perform_tomographic_reconstruction(
+                    sinograms, config_dicts[sim_id]
+                )
+                tifffile.imwrite(
+                    config_dicts[sim_id]["reconstruction_output_path"],
+                    reconstruction,
+                )
+                del sinograms, reconstruction
+
+                segmentation = segment_reconstruction(config_dicts[sim_id])
+                tifffile.imwrite(
+                    config_dicts[sim_id]["segmentation_output_path"],
+                    segmentation,
+                )
+                del segmentation
+
+                save_data(data_base_path, config_dicts[sim_id])
+
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt, terminating all processes!")
+        clean_up_batch_files(num_process)
+        sys.exit(0)
+
+    clean_up_batch_files(num_process)
+    t1 = time.time()
+    print(
+        "\nSucessfully processed "
+        + str(num_success)
+        + " out of "
+        + str(num_process)
+        + " samples."
+    )
+    print("\nAverage time per sample: " + str((t1 - t0) / num_success) + " s.")
+
+    return None
 
 
 if __name__ == "__main__":
-    num_process = 2
-    domain_randomization = 0.2
-    data_base_path = "./tex-ray/dbase"
 
-    with open("./tex-ray/input/default_input.json") as f:
-        master_config = json.load(f)
+    config_path = "./tex-ray/input/default_input.json"
+    database_path = "./tex-ray/dbase"
+    num_process = 4
+    domain_randomization = 0.2
+
+    with open(config_path) as f:
+        default_config = json.load(f)
 
     while True:
-        t0 = time.time()
-        print(
-            "\nStarting to process a batch of size " + str(num_process) + "."
-        )
-        config_dicts, exit_codes = generate_woven_composite_sample_batch(
-            num_process, master_config, domain_randomization
-        )
-
-        try:
-            for exit_code, sim_id in zip(exit_codes, range(num_process)):
-                if exit_code == 0:
-                    sinograms = generate_sinograms(config_dicts[sim_id])
-                    reconstruction = perform_tomographic_reconstruction(
-                        sinograms, config_dicts[sim_id]
-                    )
-                    tifffile.imwrite(
-                        config_dicts[sim_id]["reconstruction_output_path"],
-                        reconstruction,
-                    )
-                    del sinograms, reconstruction
-
-                    segmentation = segment_reconstruction(config_dicts[sim_id])
-                    tifffile.imwrite(
-                        config_dicts[sim_id]["segmentation_output_path"],
-                        segmentation,
-                    )
-                    del segmentation
-                    save_data(data_base_path, config_dicts[sim_id])
-        except KeyboardInterrupt:
-            print("\nKeyboard interrupt, terminating all processes!")
-            clean_up_batch_files(num_process)
-            sys.exit(0)
-        else:
-            clean_up_batch_files(num_process)
-            t1 = time.time()
-            print(
-                "\nFinished processing a batch of size "
-                + str(num_process)
-                + "."
+        job = (
+            Process(  # We wrap each batch in a process to prevent memory leak.
+                target=run_batch,
+                args=(default_config, database_path),
+                kwargs={
+                    "num_process": num_process,
+                    "domain_randomization": domain_randomization,
+                },
             )
-            print(
-                "\nAverage time per sample: "
-                + str((t1 - t0) / num_process)
-                + " s."
-            )
+        )
+        job.start()
+        job.join()
+        job.close()
