@@ -15,6 +15,8 @@ RUN apt update && apt upgrade -y && \
                    python3-pip \
                    freeglut3-dev \
                    libboost-all-dev \
+                   libxcb-cursor0 \
+                   imagemagick \
                    xterm
 
 # Build base functionality of TexGen.
@@ -53,7 +55,7 @@ RUN cd TexGen/bin && \
 # Install python packages.
 RUN pip3 install git+https://bitbucket.org/spekpy/spekpy_release.git \
         numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr torch \
-        cupy-cuda12x meshio pymeshlab olefile scikit-image h5py
+        torchvision cupy-cuda12x meshio pymeshlab olefile scikit-image h5py
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
