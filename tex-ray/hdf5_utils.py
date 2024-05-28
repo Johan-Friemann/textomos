@@ -3,6 +3,7 @@ import tifffile
 import h5py
 import meshio
 
+
 """
 This file contains routines for saving simulation results to a database of hdf5
 files. The design of the database structure is aimed to counteract two
@@ -65,6 +66,7 @@ def save_mesh_to_hdf5(
             "matrix_triangle_vertex_connectivity",
             data=matrix_triangle_vertex_connectivity,
         )
+    return None
 
 
 def save_reconstruction_to_hdf5(chunk_path, local_idx, config_dict):
@@ -89,6 +91,7 @@ def save_reconstruction_to_hdf5(chunk_path, local_idx, config_dict):
         data_set = f.create_dataset(
             "reconstruction_" + str(local_idx), data=reconstruction
         )
+    return None
 
 
 def save_segmentation_to_hdf5(chunk_path, local_idx, config_dict):
@@ -113,6 +116,7 @@ def save_segmentation_to_hdf5(chunk_path, local_idx, config_dict):
         data_set = f.create_dataset(
             "segmentation_" + str(local_idx), data=segmentation
         )
+    return None
 
 
 def save_data(
@@ -204,3 +208,5 @@ def save_data(
         segmentation_path + "segmentation_data_" + str(chunk_idx) + ".hdf5"
     )
     save_segmentation_to_hdf5(segmentation_chunk_path, local_idx, config_dict)
+
+    return None
