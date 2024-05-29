@@ -382,7 +382,8 @@ if __name__ == "__main__":
 
     config_path = "./tex-ray/input/default_input.json"
     database_path = "./tex-ray/dbase"
-    num_process = 4
+    num_process = 10
+    chunk_size = 5
     domain_randomization = 0.2
 
     with open(config_path) as f:
@@ -396,6 +397,7 @@ if __name__ == "__main__":
                 kwargs={
                     "num_process": num_process,
                     "domain_randomization": domain_randomization,
+                    "chunk_size": chunk_size,
                 },
             )
         )
