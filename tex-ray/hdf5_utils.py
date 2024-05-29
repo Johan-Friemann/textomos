@@ -215,6 +215,69 @@ def save_data(
     return None
 
 
+def database_len(database_path):
+    """Get the length of the database.
+
+    Args:
+        database_path (str): The absolute path to the database folder.
+
+    Keyword args:
+        -
+
+    Returns:
+        len (int): The number of items in the database.
+    """
+    map_path = os.path.join(database_path, "database_map.hdf5")
+    if not os.path.exists(database_path):
+        raise FileNotFoundError(
+            "There exists no database at '" + database_path + "'."
+        )
+
+    with h5py.File(map_path, "r") as f:
+        current_global_index = f.attrs.get("current_global_index")
+
+    return current_global_index
+
+
+def get_metadata(database_path, global_idx, field_name):
+    """Get the metadata with name field_name from the datapoint with global_idx.
+
+    Args:
+        database_path (str): The absolute path to the database folder.
+
+        global_idx (int): The global index of the data to access.
+
+        field_name (str): The name of the field to access.
+
+    Keyword args:
+        -
+
+    Returns:
+        metadata (various types): The value stored at metadata.
+    """
+    map_path = os.path.join(database_path, "database_map.hdf5")
+    if not os.path.exists(database_path):
+        raise FileNotFoundError(
+            "There exists no database at '" + database_path + "'."
+        )
+
+    with h5py.File(map_path, "r") as f:
+        current_global_index = f.attrs.get("current_global_index")
+        if global_idx > current_global_index:
+            raise ValueError(
+                "No data point with index " + str(global_idx) + " exists."
+            )
+        metadata = f["data_" + str(global_idx)]["metadata"].attrs.get(
+            field_name
+        )
+        if metadata is None:
+            raise ValueError(
+                "No metadata point with name " + field_name + " exists."
+            )
+
+    return metadata
+
+
 def global_to_local_index(database_path, global_idx):
     """Find the chunk and local index of a data point from its global index.
 
