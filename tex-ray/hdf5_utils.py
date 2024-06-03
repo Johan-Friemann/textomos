@@ -215,8 +215,52 @@ def save_data(
     return None
 
 
-def database_len(database_path):
-    """Get the length of the database.
+def get_reconstruction_chunk_handle(database_path, chunk_index):
+    """Get a reconstruction chunk file handle from database.
+
+    Args:
+        database_path (str): The absolute path to the database folder.
+
+        chunk_index (int): The chunk index of the file to get.
+
+    Keyword args:
+        -
+
+    Returns:
+        chunk_handle (HDF5 file): A file handle that points to reconstruction
+                                  data stored in chunk with chunk_index.
+    """
+    reconstruction_path = os.path.join(
+        database_path,
+        "reconstruction_data/reconstruction_data_" + str(chunk_index) + ".hdf5",
+    )
+    return h5py.File(reconstruction_path, "r")
+
+
+def get_segmentation_chunk_handle(database_path, chunk_index):
+    """Get a segmentation chunk file handle from database.
+
+    Args:
+        database_path (str): The absolute path to the database folder.
+
+        chunk_index (int): The chunk index of the file to get.
+
+    Keyword args:
+        -
+
+    Returns:
+        chunk_handle (HDF5 file): A file handle that points to segmentation
+                                  data stored in chunk with chunk_index.
+    """
+    segmentation_path = os.path.join(
+        database_path,
+        "segmentation_data/segmentation_data_" + str(chunk_index) + ".hdf5",
+    )
+    return h5py.File(segmentation_path, "r")
+
+
+def database_size(database_path):
+    """Get the size of the database.
 
     Args:
         database_path (str): The absolute path to the database folder.
@@ -225,7 +269,8 @@ def database_len(database_path):
         -
 
     Returns:
-        len (int): The number of items in the database.
+        global_index (int): The number of items in the database.
+        chunk_index (int): The number of chunks (files/field) in the database.
     """
     map_path = os.path.join(database_path, "database_map.hdf5")
     if not os.path.exists(database_path):
@@ -235,8 +280,9 @@ def database_len(database_path):
 
     with h5py.File(map_path, "r") as f:
         current_global_index = f.attrs.get("current_global_index")
+        current_chunk_index = f.attrs.get("current_chunk_index")
 
-    return current_global_index
+    return current_global_index, current_chunk_index
 
 
 def get_metadata(database_path, global_idx, field_name):
@@ -328,13 +374,10 @@ def get_reconstruction_from_database(database_path, global_idx):
     """
     # global_to_local raises exception if database doesn't exist.
     chunk_idx, local_idx = global_to_local_index(database_path, global_idx)
-    reconstruction_path = os.path.join(
-        database_path,
-        "reconstruction_data/reconstruction_data_" + str(chunk_idx) + ".hdf5",
-    )
 
-    with h5py.File(reconstruction_path, "r") as f:
-        reconstruction = f["reconstruction_" + str(local_idx)][:]
+    f = get_reconstruction_chunk_handle(database_path, chunk_idx)
+    reconstruction = f["reconstruction_" + str(local_idx)][:]
+    f.close()
 
     return reconstruction
 
@@ -355,13 +398,10 @@ def get_segmentation_from_database(database_path, global_idx):
     """
     # global_to_local raises exception if database doesn't exist.
     chunk_idx, local_idx = global_to_local_index(database_path, global_idx)
-    segmentation_path = os.path.join(
-        database_path,
-        "segmentation_data/segmentation_data_" + str(chunk_idx) + ".hdf5",
-    )
 
-    with h5py.File(segmentation_path, "r") as f:
-        segmentation = f["segmentation_" + str(local_idx)][:]
+    f = get_segmentation_chunk_handle(database_path, chunk_idx)
+    segmentation = f["segmentation_" + str(local_idx)][:]
+    f.close()
 
     return segmentation
 
