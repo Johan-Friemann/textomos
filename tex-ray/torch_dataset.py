@@ -67,10 +67,6 @@ class TexRayDataset(Dataset):
         recon_slice = torch.tensor(
             self.recon_data[chunk_idx][local_idx][slice_idx]
         )
-        if self.transform:
-            recon_slice *= 1 / torch.max(recon_slice)
-            recon_slice -= 0.485
-            recon_slice/= 0.229
 
         seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
         seg_mask = torch.zeros(
