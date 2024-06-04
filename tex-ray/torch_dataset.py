@@ -17,6 +17,12 @@ Tex-Ray hdf5 database format.
 class TexRayDataset(Dataset):
     """See pytorch dataset class documentation for specifics of __method__
     type methods that are required by the dataset interface.
+
+    Params:
+        database_path (str): The absolute path to the database folder.
+
+    Keyword params:
+        transform (pytorch transform): The transform to apply to the input data.
     """
 
     def __init__(self, database_path, transform=None):
