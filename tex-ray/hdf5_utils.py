@@ -259,7 +259,7 @@ def get_segmentation_chunk_handle(database_path, chunk_index):
     return h5py.File(segmentation_path, "r")
 
 
-def database_size(database_path):
+def get_database_shape(database_path):
     """Get the size of the database.
 
     Args:
@@ -269,8 +269,9 @@ def database_size(database_path):
         -
 
     Returns:
-        global_index (int): The number of items in the database.
-        chunk_index (int): The number of chunks (files/field) in the database.
+        num_samples (int): The number of items in the database.
+        num_chunks (int): The number of chunks (files/field) in the database.
+        chunk_size (int): The database chunk size.
     """
     map_path = os.path.join(database_path, "database_map.hdf5")
     if not os.path.exists(database_path):
@@ -279,10 +280,11 @@ def database_size(database_path):
         )
 
     with h5py.File(map_path, "r") as f:
-        current_global_index = f.attrs.get("current_global_index")
-        current_chunk_index = f.attrs.get("current_chunk_index")
+        num_samples = f.attrs.get("current_global_index") + 1
+        num_chunks = f.attrs.get("current_chunk_index") + 1
+        chunk_size = f.attrs.get("chunk_size")
 
-    return current_global_index, current_chunk_index
+    return num_samples, num_chunks, chunk_size
 
 
 def get_metadata(database_path, global_idx, field_name):
