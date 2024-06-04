@@ -4,7 +4,7 @@ from hdf5_utils import (
     get_reconstruction_chunk_handle,
     get_segmentation_chunk_handle,
     get_metadata,
-    database_shape,
+    get_database_shape,
 )
 
 
@@ -18,6 +18,7 @@ class TexRayDataset(Dataset):
     """See pytorch dataset class documentation for specifics of __method__
     type methods that are required by the dataset interface.
     """
+
     def __init__(self, database_path, transform=None):
         self.database_path = database_path
 
@@ -27,7 +28,7 @@ class TexRayDataset(Dataset):
         detector_rows = get_metadata(database_path, 0, "detector_rows")
         binning = get_metadata(database_path, 0, "binning")
         self.slices_per_sample = detector_rows // binning
-        self.num_samples, self.num_chunks, self.chunk_size = database_shape(
+        self.num_samples, self.num_chunks, self.chunk_size = get_database_shape(
             self.database_path
         )
 
@@ -98,7 +99,9 @@ class TexRayDataset(Dataset):
             local_idx = global_idx % self.chunk_size
             slice_idx = idx % self.slices_per_sample
 
-            seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
+            seg_slice = torch.tensor(
+                self.seg_data[chunk_idx][local_idx][slice_idx]
+            )
             for i in range(4):
                 class_freq[i] += torch.sum(seg_slice == i)
 
