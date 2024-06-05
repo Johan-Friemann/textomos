@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from torch.utils.data import Dataset
 from hdf5_utils import (
     get_reconstruction_chunk_handle,
@@ -101,7 +102,7 @@ class TexRayDataset(Dataset):
                                     given as [air, matrix, weft, warp].
         """
         class_freq = torch.tensor([0, 0, 0, 0])
-        for idx in range(self.num_samples*self.slices_per_sample):
+        for idx in range(self.num_samples * self.slices_per_sample):
             global_idx = idx // self.slices_per_sample
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
