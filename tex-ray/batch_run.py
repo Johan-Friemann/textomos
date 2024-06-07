@@ -295,7 +295,11 @@ def clean_up_batch_files(num_samples):
 
 
 def run_batch(
-    master_config, data_base_path, num_process=1, domain_randomization=0.0
+    master_config,
+    data_base_path,
+    num_process=1,
+    domain_randomization=0.0,
+    chunk_size=10,
 ):
     """Run a batch of tex-ray simulations based on a config dictionary, and
     store the results in a hdf5 database.
@@ -313,8 +317,12 @@ def run_batch(
                            the number of samples that is produced per batch.
 
         domain_randomization (float): A number between 0.0 and 1.0 that
-                                      determines the rpercentual domain
+                                      determines the percentual domain
                                       randomization to be applied to the sample.
+
+        chunk_size (int): The chunk size. This argument is only used when
+                          creating a new database.
+
     Returns:
         -
     """
@@ -347,7 +355,9 @@ def run_batch(
                 )
                 del segmentation
 
-                save_data(data_base_path, config_dicts[sim_id])
+                save_data(
+                    data_base_path, config_dicts[sim_id], chunk_size=chunk_size
+                )
 
     except KeyboardInterrupt:
         print("\nKeyboard interrupt, terminating all processes!")
@@ -372,7 +382,8 @@ if __name__ == "__main__":
 
     config_path = "./tex-ray/input/default_input.json"
     database_path = "./tex-ray/dbase"
-    num_process = 4
+    num_process = 10
+    chunk_size = 5
     domain_randomization = 0.2
 
     with open(config_path) as f:
@@ -386,6 +397,7 @@ if __name__ == "__main__":
                 kwargs={
                     "num_process": num_process,
                     "domain_randomization": domain_randomization,
+                    "chunk_size": chunk_size,
                 },
             )
         )
