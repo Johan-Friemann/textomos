@@ -69,7 +69,9 @@ def save_mesh_to_hdf5(
     return None
 
 
-def save_reconstruction_to_hdf5(chunk_path, local_idx, config_dict):
+def save_reconstruction_to_hdf5(
+    chunk_path, local_idx, config_dict, slice_axis="x"
+):
     """Save a reconstruction to an hdf5 file.
 
     Args:
@@ -81,20 +83,31 @@ def save_reconstruction_to_hdf5(chunk_path, local_idx, config_dict):
                             simulation that is about to be saved.
 
     Keyword args:
-        -
+        slice_axis (str): The axis along which the data will be quickest
+                          to access. Can be "x", "y", or "z".
 
     Returns:
         -
     """
     reconstruction = tifffile.imread(config_dict["reconstruction_output_path"])
+    if slice_axis == "x":
+        reconstruction = np.transpose(reconstruction, (2, 0, 1))
+    elif slice_axis == "y":
+        reconstruction = np.transpose(reconstruction, (1, 0, 2))
+    elif slice_axis != "z":
+        raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
     with h5py.File(chunk_path, "a") as f:
         data_set = f.create_dataset(
             "reconstruction_" + str(local_idx), data=reconstruction
         )
+        data_set.attrs["slice_axis"] = slice_axis
     return None
 
 
-def save_segmentation_to_hdf5(chunk_path, local_idx, config_dict):
+def save_segmentation_to_hdf5(
+    chunk_path, local_idx, config_dict, slice_axis="x"
+):
     """Save a segmentation to an hdf5 file.
 
     Args:
@@ -106,16 +119,25 @@ def save_segmentation_to_hdf5(chunk_path, local_idx, config_dict):
                             simulation that is about to be saved.
 
     Keyword args:
-        -
+        slice_axis (str): The axis along which the data will be quickest
+                          to access. Can be "x", "y", or "z".
 
     Returns:
         -
     """
     segmentation = tifffile.imread(config_dict["segmentation_output_path"])
+    if slice_axis == "x":
+        segmentation = np.transpose(segmentation, (2, 0, 1))
+    elif slice_axis == "y":
+        segmentation = np.transpose(segmentation, (1, 0, 2))
+    elif slice_axis != "z":
+        raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
     with h5py.File(chunk_path, "a") as f:
         data_set = f.create_dataset(
             "segmentation_" + str(local_idx), data=segmentation
         )
+        data_set.attrs["slice_axis"] = slice_axis
     return None
 
 
@@ -378,7 +400,15 @@ def get_reconstruction_from_database(database_path, global_idx):
     chunk_idx, local_idx = global_to_local_index(database_path, global_idx)
 
     f = get_reconstruction_chunk_handle(database_path, chunk_idx)
-    reconstruction = f["reconstruction_" + str(local_idx)][:]
+    reconstruction_dataset = f["reconstruction_" + str(local_idx)]
+    slice_axis = reconstruction_dataset.attrs.get("slice_axis")
+
+    
+    if slice_axis == "x":
+        reconstruction = np.transpose(reconstruction_dataset[:], (1, 2, 0))
+    elif slice_axis == "y":
+        reconstruction = np.transpose(reconstruction_dataset[:], (1, 0, 2))
+
     f.close()
 
     return reconstruction
@@ -402,7 +432,14 @@ def get_segmentation_from_database(database_path, global_idx):
     chunk_idx, local_idx = global_to_local_index(database_path, global_idx)
 
     f = get_segmentation_chunk_handle(database_path, chunk_idx)
-    segmentation = f["segmentation_" + str(local_idx)][:]
+    segmentation_dataset = f["segmentation_" + str(local_idx)]
+    slice_axis = segmentation_dataset.attrs.get("slice_axis")
+    
+    if slice_axis == "x":
+        segmentation = np.transpose(segmentation_dataset[:], (1, 2, 0))
+    elif slice_axis == "y":
+        segmentation = np.transpose(segmentation_dataset[:], (1, 0, 2))
+
     f.close()
 
     return segmentation
