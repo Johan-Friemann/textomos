@@ -1,4 +1,5 @@
 import torch
+import tifffile
 from torch.utils.data import Dataset
 from hdf5_utils import (
     get_reconstruction_chunk_handle,
@@ -10,7 +11,8 @@ from hdf5_utils import (
 
 """
 This file contains a custom pytorch dataset class that is tailormade for the
-Tex-Ray hdf5 database format.
+Tex-Ray hdf5 database format. It also contains a dataset class suitable for
+inference testing on real scan data.
 """
 
 
@@ -115,3 +117,41 @@ class TexRayDataset(Dataset):
 
         median = torch.median(class_freq)
         return median / class_freq
+
+class TIFFDataset(Dataset):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        tiff_path (str): The absolute path to the tiff-file.
+
+    Keyword params:
+        transform (pytorch transform): The transform to apply to the input data.
+
+        slice_axis (str): The axis along which to take slices.
+    """
+
+    def __init__(self, tiff_path, transform=None, slice_axis = "x"):
+        self.tiff_path = tiff_path
+        self.transform = transform
+
+        self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
+        if slice_axis == "x":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 2)
+            self.reconstruction = torch.transpose(self.reconstruction, 1, 2)
+        elif slice_axis == "y":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 1)
+        elif slice_axis != "z":
+            raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+        
+    def __len__(self):
+        return self.reconstruction.shape[0]
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        recon_slice = self.reconstruction[idx]
+
+        return recon_slice
