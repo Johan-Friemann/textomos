@@ -2,7 +2,33 @@ import torch
 
 
 def one_epoch(model, criterion, optimizer, dataloader, device, mode):
-    """DOCSTRING"""
+    """Process one (1) epoch. This can be either training or validation.
+
+
+    Args:
+        model (torch model): The model to train/validate.
+
+        criterion (torch loss function): The loss function to use for training/
+                                         validation.
+
+        optimizer (torch optimizer): Optimizer to use for training.
+
+        dataloader (torch dataloader): Dataloader for loading data for training/
+                                       validation.
+
+        device (torch device): The device (cpu/gpu) that will be used to load/
+                               train the model.
+
+        mode (str): If set to "training" the model will be trained, else the
+                    model is validated.
+
+    Keyword args:
+        -
+
+    Returns:
+        epoch_loss (float): The epoch loss. This is the sum of all batch losses
+                            divided by the number of batches in the epoch.
+    """
     if mode == "training":
         header = "Training"
         model.train()
@@ -53,7 +79,38 @@ def train_model(
     num_epochs,
     state_dict_path="./tex-ray/state_dict.pt",
 ):
-    """DOCSTRING"""
+    """Train a torch model for one or more epochs.
+
+
+    Args:
+        model (torch model): The model to train.
+
+        criterion (torch loss function): The loss function to use for training.
+
+        optimizer (torch optimizer): Optimizer to use for training.
+
+        dataloaders (dict(torch dataloader)): A dictionary containing two items.
+                                              The first key "training" refers to
+                                              the dataloader to use for training
+                                              while the second key "validation"
+                                              refers to the dataloader to use
+                                              for validation.
+
+        device (torch device): The device (cpu/gpu) that will be used to load/
+                               train the model.
+
+        num_epochs (int): The number of epochs to train the model.
+
+    Keyword args:
+        state_dict_path (str): The absolute path to where to save the state
+                               dictionary. The function continuously saves the
+                               set of weights that results in the current lowest
+                               validation loss
+
+    Returns:
+        epoch_loss (float): The epoch loss. This is the sum of all batch losses
+                            divided by the number of batches in the epoch.
+    """
     num_space = 32 - len(model.__class__.__name__) - len(str(num_epochs))
 
     print(
