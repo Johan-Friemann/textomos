@@ -77,7 +77,8 @@ def train_model(
     dataloaders,
     device,
     num_epochs,
-    state_dict_path="./tex-ray/state_dict.pt",
+    scheduler=None,
+    state_dict_path=None,
 ):
     """Train a torch model for one or more epochs.
 
@@ -107,6 +108,9 @@ def train_model(
                                set of weights that results in the current lowest
                                validation loss
 
+        scheduler (torch learning rate scheduler): The learning rate scheduler.
+                                                   to utilze during training.
+                                                   Is called once per epoch.
     Returns:
         -
     """
@@ -149,9 +153,19 @@ def train_model(
                     "Validation epoch loss: " + loss_str,
                     " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
-                if epoch_loss < best_loss:
+                if epoch_loss < best_loss and state_dict_path is not None:
                     best_loss = epoch_loss
                     torch.save(model.state_dict(), state_dict_path)
+        
+        if scheduler is not None:
+            scheduler.step()
+            current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
+            num_space = 35 - len(current_lr_str)
+            print(
+                "||" + " " * (num_space // 2 - 1),
+                "Updating learning rate to: " + current_lr_str,
+                " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+            )
         print("-" * 66)
 
     return None
