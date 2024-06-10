@@ -84,14 +84,14 @@ def train_model(
                 print(
                     "||" + " " * (num_space // 2 - 1),
                     "Training epoch loss: " + loss_str,
-                    " " * (num_space // 2 + (num_space % 2) - 1) + "||"
+                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
             if mode == "validation":
                 num_space = 39 - len(loss_str)
                 print(
                     "||" + " " * (num_space // 2 - 1),
                     "Validation epoch loss: " + loss_str,
-                    " " * (num_space // 2 + (num_space % 2) - 1) + "||"
+                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
