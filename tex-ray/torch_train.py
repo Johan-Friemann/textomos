@@ -147,15 +147,17 @@ def train_model(
                     " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
             if mode == "validation":
+                if epoch_loss < best_loss:
+                    best_loss = epoch_loss
+                    loss_str += " *"
+                    if state_dict_path is not None:
+                        torch.save(model.state_dict(), state_dict_path)
                 num_space = 39 - len(loss_str)
                 print(
                     "||" + " " * (num_space // 2 - 1),
                     "Validation epoch loss: " + loss_str,
                     " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
-                if epoch_loss < best_loss and state_dict_path is not None:
-                    best_loss = epoch_loss
-                    torch.save(model.state_dict(), state_dict_path)
         
         if scheduler is not None:
             scheduler.step()
