@@ -108,8 +108,7 @@ def train_model(
                                validation loss
 
     Returns:
-        epoch_loss (float): The epoch loss. This is the sum of all batch losses
-                            divided by the number of batches in the epoch.
+        -
     """
     num_space = 32 - len(model.__class__.__name__) - len(str(num_epochs))
 
@@ -154,3 +153,5 @@ def train_model(
                     best_loss = epoch_loss
                     torch.save(model.state_dict(), state_dict_path)
         print("-" * 66)
+
+    return None
