@@ -27,6 +27,7 @@ def one_epoch(model, criterion, optimizer, dataloader, device, mode):
 
         batch_loss = loss.item()
         epoch_loss += batch_loss
+
         print(
             "|| Epoch progress: ",
             "{:6.2%}".format(current_batch / num_batches),
@@ -34,4 +35,5 @@ def one_epoch(model, criterion, optimizer, dataloader, device, mode):
             end="\r",
         )
 
+    print(" " * 61, end="\r") # Clear such that following text prints cleanly.
     return epoch_loss / num_batches
