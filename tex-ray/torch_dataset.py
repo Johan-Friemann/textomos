@@ -153,5 +153,7 @@ class TIFFDataset(Dataset):
             idx = idx.tolist()
 
         recon_slice = self.reconstruction[idx]
+        if self.transform:
+            recon_slice = self.transform(recon_slice)
 
         return recon_slice
