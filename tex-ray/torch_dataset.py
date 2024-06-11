@@ -73,9 +73,10 @@ class TexRayDataset(Dataset):
         local_idx = global_idx % self.chunk_size
         slice_idx = idx % self.slices_per_sample
 
+        # Unsqueeze to create a channel axis, needed for transforms etc...
         recon_slice = torch.tensor(
             self.recon_data[chunk_idx][local_idx][slice_idx]
-        )
+        ).unsqueeze(0)
         if self.transform:
             recon_slice = self.transform(recon_slice)
 
@@ -118,6 +119,7 @@ class TexRayDataset(Dataset):
         median = torch.median(class_freq)
         return median / class_freq
 
+
 class TIFFDataset(Dataset):
     """See pytorch dataset class documentation for specifics of __method__
     type methods that are required by the dataset interface.
@@ -131,7 +133,7 @@ class TIFFDataset(Dataset):
         slice_axis (str): The axis along which to take slices.
     """
 
-    def __init__(self, tiff_path, transform=None, slice_axis = "x"):
+    def __init__(self, tiff_path, transform=None, slice_axis="x"):
         self.tiff_path = tiff_path
         self.transform = transform
 
@@ -144,7 +146,6 @@ class TIFFDataset(Dataset):
         elif slice_axis != "z":
             raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
 
-        
     def __len__(self):
         return self.reconstruction.shape[0]
 
@@ -152,7 +153,8 @@ class TIFFDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        recon_slice = self.reconstruction[idx]
+        # Unsqueeze to create a channel axis, needed for transforms etc...
+        recon_slice = self.reconstruction[idx].unsqueeze(0)
         if self.transform:
             recon_slice = self.transform(recon_slice)
 
