@@ -213,27 +213,6 @@ def draw_image_with_masks(
     return None
 
 
-def test_model(model, device, dataloader, idx):
-    """DOCSTRING"""
-    model.eval()
-
-    iterator = iter(dataloader)
-    for i in range(idx):
-        next(iterator)
-    inputs = next(iterator)
-
-    if type(inputs) is list: # Handle TIFFDataset vs TexRayDataset.
-        inputs = inputs[0]
-
-    inputs = inputs.to(device)
-
-    prediction = model(inputs.unsqueeze(1))["out"]
-
-    draw_image_with_masks(inputs, prediction)
-
-    return None
-
-
 if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -280,8 +259,20 @@ if __name__ == "__main__":
         )
 
     model.load_state_dict(torch.load(state_dict_path))
+    model.eval()
+
     test_set = TIFFDataset(
         "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
     )
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=1)
-    test_model(model, device, test_loader, test_idx)
+    
+    iterator = iter(test_loader)
+    for i in range(test_idx):
+        next(iterator)
+    inputs = next(iterator)
+    if type(inputs) is list: # Handle TIFFDataset vs TexRayDataset.
+        inputs = inputs[0]
+    inputs = inputs.to(device)
+    prediction = model(inputs.unsqueeze(1))["out"]
+    draw_image_with_masks(inputs, prediction)
+
