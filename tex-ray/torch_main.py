@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.transforms.functional import to_pil_image
+from torchvision.transforms import v2
 from torchvision.utils import draw_segmentation_masks
 from torchvision.models.segmentation import (
     deeplabv3_resnet50,
@@ -151,6 +151,32 @@ def build_dataloaders(
     return dataloaders
 
 
+def build_transforms(mean, std):
+    """Build the data transforms. The transform consists of a min-max scaling 
+    composed with a normalization.
+
+    Args:
+        mean (float): The dataset mean.
+
+        std (float): The dataset standard deviation.
+
+        num_workers (int): The number of cpu workers to use while loading.
+
+    Keyword args:
+        -
+
+    Returns:
+        transforms (torchvision transform): Transformation to apply to inputs.
+    """
+
+    min_max_scale = lambda tensor: (tensor - torch.min(tensor)) / (
+        torch.max(tensor) - torch.min(tensor)
+    )
+    transforms = v2.Compose([v2.Lambda(min_max_scale), v2.Normalize(mean, std)])
+
+    return transforms
+
+
 def draw_image_with_masks(
     input,
     prediction,
@@ -202,7 +228,7 @@ def draw_image_with_masks(
         colors=["red", "blue", "green", "yellow"],
     )
 
-    pil_image = to_pil_image(input_with_mask)
+    pil_image = v2.ToPILImage()(input_with_mask)
     if save:
         pil_image.save(
             save_path,
@@ -223,14 +249,16 @@ if __name__ == "__main__":
     learn_rate = 0.001
     weight_decay = 0.001
     momentum = 0.9
-    transforms = None
     num_workers = 4
     state_dict_path = "./tex-ray/state_dict.pt"
 
+    mean, std = 0.1039, 0.1894
+    transforms = build_transforms([mean], [std])
+
     model = build_model()
     model = model.to(device)
-    train = False
 
+    train = True
     if train:
         dataset = TexRayDataset("./tex-ray/dbase", transform=transforms)
         weight = dataset.get_loss_weights().to(device)
@@ -262,17 +290,20 @@ if __name__ == "__main__":
     model.eval()
 
     test_set = TIFFDataset(
-        "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
+    "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
     )
-    test_loader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=1)
-    
+    test_loader = DataLoader(
+        test_set, batch_size=1, shuffle=False, num_workers=1
+    )
+
     iterator = iter(test_loader)
     for i in range(test_idx):
         next(iterator)
     inputs = next(iterator)
-    if type(inputs) is list: # Handle TIFFDataset vs TexRayDataset.
+    if type(inputs) is list:  # Handle TIFFDataset vs TexRayDataset.
         inputs = inputs[0]
-    inputs = inputs.to(device)
-    prediction = model(inputs.unsqueeze(1))["out"]
-    draw_image_with_masks(inputs, prediction)
-
+    inputs[inputs > 1.0] = 1.0
+    inputs.to(device)
+    transformed_inputs = transforms(inputs).unsqueeze(1).to(device)
+    prediction = model(transformed_inputs)["out"]
+    draw_image_with_masks(inputs, prediction, alpha=0.2)
