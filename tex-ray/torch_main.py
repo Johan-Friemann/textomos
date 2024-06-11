@@ -304,6 +304,6 @@ if __name__ == "__main__":
         inputs = inputs[0]
     inputs[inputs > 1.0] = 1.0
     inputs.to(device)
-    transformed_inputs = transforms(inputs).unsqueeze(1).to(device)
+    transformed_inputs = transforms(inputs).to(device)
     prediction = model(transformed_inputs)["out"]
     draw_image_with_masks(inputs, prediction, alpha=0.2)

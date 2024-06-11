@@ -41,7 +41,7 @@ def one_epoch(model, criterion, optimizer, dataloader, device, mode):
     current_batch = 0
 
     for inputs, labels in dataloader:
-        inputs = inputs.to(device).unsqueeze(1)  # Unsqueeze channel axis
+        inputs = inputs.to(device)
         labels = labels.to(device)
         current_batch += 1
 
