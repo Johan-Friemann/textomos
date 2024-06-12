@@ -24,13 +24,15 @@ class TexRayDataset(Dataset):
         database_path (str): The absolute path to the database folder.
 
     Keyword params:
-        transform (pytorch transform): The transform to apply to the input data.
+        normalize (bool): Will first scale the data so it is in the range 0 to 1
+                          (min-max scaling), then the data is scaled such that
+                          it has mean 0 and standard deviation 1 (z-score).
     """
 
-    def __init__(self, database_path, transform=None):
+    def __init__(self, database_path, normalize=False):
         self.database_path = database_path
 
-        self.transform = transform
+        self.normalize = normalize
 
         # data_0 is guaranteed to exist
         detector_rows = get_metadata(database_path, 0, "detector_rows")
@@ -73,12 +75,17 @@ class TexRayDataset(Dataset):
         local_idx = global_idx % self.chunk_size
         slice_idx = idx % self.slices_per_sample
 
-        # Unsqueeze to create a channel axis, needed for transforms etc...
+        # Unsqueeze to create a channel axis for consistency.
         recon_slice = torch.tensor(
             self.recon_data[chunk_idx][local_idx][slice_idx]
         ).unsqueeze(0)
-        if self.transform:
-            recon_slice = self.transform(recon_slice)
+        if self.normalize:
+            recon_slice = (recon_slice - torch.min(recon_slice)) / (
+                torch.max(recon_slice) - torch.min(recon_slice)
+            )
+            recon_slice = (recon_slice - torch.mean(recon_slice)) / torch.std(
+                recon_slice
+            )
 
         seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
         seg_mask = torch.zeros(
@@ -128,14 +135,11 @@ class TIFFDataset(Dataset):
         tiff_path (str): The absolute path to the tiff-file.
 
     Keyword params:
-        transform (pytorch transform): The transform to apply to the input data.
-
         slice_axis (str): The axis along which to take slices.
     """
 
-    def __init__(self, tiff_path, transform=None, slice_axis="x"):
+    def __init__(self, tiff_path, slice_axis="x"):
         self.tiff_path = tiff_path
-        self.transform = transform
 
         self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
         if slice_axis == "x":
@@ -153,9 +157,7 @@ class TIFFDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        # Unsqueeze to create a channel axis, needed for transforms etc...
+        # Unsqueeze to create a channel axis for consistency.
         recon_slice = self.reconstruction[idx].unsqueeze(0)
-        if self.transform:
-            recon_slice = self.transform(recon_slice)
 
         return recon_slice
