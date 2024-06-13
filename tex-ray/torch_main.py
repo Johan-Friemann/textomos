@@ -151,32 +151,6 @@ def build_dataloaders(
     return dataloaders
 
 
-def build_transforms(mean, std):
-    """Build the data transforms. The transform consists of a min-max scaling 
-    composed with a normalization.
-
-    Args:
-        mean (float): The dataset mean.
-
-        std (float): The dataset standard deviation.
-
-        num_workers (int): The number of cpu workers to use while loading.
-
-    Keyword args:
-        -
-
-    Returns:
-        transforms (torchvision transform): Transformation to apply to inputs.
-    """
-
-    min_max_scale = lambda tensor: (tensor - torch.min(tensor)) / (
-        torch.max(tensor) - torch.min(tensor)
-    )
-    transforms = v2.Compose([v2.Lambda(min_max_scale), v2.Normalize(mean, std)])
-
-    return transforms
-
-
 def draw_image_with_masks(
     input,
     prediction,
@@ -219,7 +193,9 @@ def draw_image_with_masks(
     warp_mask = (prediction.argmax(1) == 3)[0]
     masks = torch.stack([air_mask, matrix_mask, weft_mask, warp_mask])
 
-    rgb_input = input.repeat(3, 1, 1)  # PIL requires RGB, becomes greyscale.
+    # draw_segmentation_masks requires RGB.
+    # [batch, channel, height, width] --> [red, green, blue, height, width]
+    rgb_input = input[0, 0, ...].repeat(3, 1, 1)
 
     input_with_mask = draw_segmentation_masks(
         rgb_input,
@@ -251,16 +227,14 @@ if __name__ == "__main__":
     momentum = 0.9
     num_workers = 4
     state_dict_path = "./tex-ray/state_dict.pt"
-
-    mean, std = 0.1039, 0.1894
-    transforms = build_transforms([mean], [std])
+    normalize = True
 
     model = build_model()
     model = model.to(device)
 
-    train = True
+    train = False
     if train:
-        dataset = TexRayDataset("./tex-ray/dbase", transform=transforms)
+        dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
         dataloaders = build_dataloaders(dataset, batch_size, num_workers)
 
@@ -302,8 +276,17 @@ if __name__ == "__main__":
     inputs = next(iterator)
     if type(inputs) is list:  # Handle TIFFDataset vs TexRayDataset.
         inputs = inputs[0]
-    inputs[inputs > 1.0] = 1.0
-    inputs.to(device)
-    transformed_inputs = transforms(inputs).to(device)
-    prediction = model(transformed_inputs)["out"]
+    inputs[inputs > 1.0] = 1.0 # Remove zingers that can mess up normalization.
+    inputs = inputs.to(device)
+
+    # We normalize here instead of inside the dataloader such that we can show
+    # the original image together with the segmentation.
+    transformed_input = (inputs - torch.min(inputs)) / (
+        torch.max(inputs) - torch.min(inputs)
+    )
+    transformed_input = (
+        transformed_input - torch.mean(transformed_input)
+    ) / torch.std(transformed_input)
+
+    prediction = model(transformed_input)["out"]
     draw_image_with_masks(inputs, prediction, alpha=0.2)
