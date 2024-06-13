@@ -1,4 +1,5 @@
 import random
+import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -120,6 +121,7 @@ def build_dataloaders(
 
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
+        numpy.random.seed(worker_seed)
         random.seed(worker_seed)
 
     if len(split) == 2:
