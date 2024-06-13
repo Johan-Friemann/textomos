@@ -232,7 +232,7 @@ if __name__ == "__main__":
     model = build_model()
     model = model.to(device)
 
-    train = False
+    train = True
     if train:
         dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
