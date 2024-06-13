@@ -1,3 +1,4 @@
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -89,6 +90,7 @@ def build_dataloaders(
     dataset,
     batch_size,
     num_workers,
+    generator,
     split=[0.8, 0.2],
     shuffle=True,
 ):
@@ -102,6 +104,9 @@ def build_dataloaders(
 
         num_workers (int): The number of cpu workers to use while loading.
 
+        generator (torch generator): The random number generator to use for data
+                                     sampling.
+
     Keyword args:
         split (list[float]): A list of either length 2 or 3 whose entries sum to
                              1. If length 2: train/validation split, if length 3
@@ -112,6 +117,10 @@ def build_dataloaders(
     Returns:
         dataloaders (dict[pytorch dataloader]): The dataloader dictionary.
     """
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        random.seed(worker_seed)
 
     if len(split) == 2:
         training, validation = torch.utils.data.random_split(dataset, split)
@@ -130,12 +139,16 @@ def build_dataloaders(
             training,
             batch_size=batch_size,
             shuffle=True,
+            worker_init_fn=seed_worker,
+            generator=generator,
             num_workers=num_workers,
         ),
         "validation": DataLoader(
             validation,
             batch_size=batch_size,
             shuffle=True,
+            worker_init_fn=seed_worker,
+            generator=generator,
             num_workers=num_workers,
         ),
     }
@@ -145,6 +158,8 @@ def build_dataloaders(
             testing,
             batch_size=batch_size,
             shuffle=True,
+            worker_init_fn=seed_worker,
+            generator=generator,
             num_workers=num_workers,
         )
 
@@ -216,6 +231,8 @@ def draw_image_with_masks(
 
 
 if __name__ == "__main__":
+    generator = torch.Generator()
+    generator.manual_seed(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     test_idx = 250
@@ -236,7 +253,9 @@ if __name__ == "__main__":
     if train:
         dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
-        dataloaders = build_dataloaders(dataset, batch_size, num_workers)
+        dataloaders = build_dataloaders(
+            dataset, batch_size, num_workers, generator
+        )
 
         criterion = nn.CrossEntropyLoss(weight=weight)
         optimizer = optim.SGD(
@@ -264,7 +283,7 @@ if __name__ == "__main__":
     model.eval()
 
     test_set = TIFFDataset(
-    "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
+        "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
     )
     test_loader = DataLoader(
         test_set, batch_size=1, shuffle=False, num_workers=1
@@ -276,7 +295,7 @@ if __name__ == "__main__":
     inputs = next(iterator)
     if type(inputs) is list:  # Handle TIFFDataset vs TexRayDataset.
         inputs = inputs[0]
-    inputs[inputs > 1.0] = 1.0 # Remove zingers that can mess up normalization.
+    inputs[inputs > 1.0] = 1.0  # Remove zingers that can mess up normalization.
     inputs = inputs.to(device)
 
     # We normalize here instead of inside the dataloader such that we can show
