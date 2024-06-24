@@ -83,9 +83,6 @@ class TexRayDataset(Dataset):
             recon_slice = (recon_slice - torch.min(recon_slice)) / (
                 torch.max(recon_slice) - torch.min(recon_slice)
             )
-            recon_slice = (recon_slice - torch.mean(recon_slice)) / torch.std(
-                recon_slice
-            )
 
         seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
         seg_mask = torch.zeros(
