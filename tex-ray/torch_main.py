@@ -305,9 +305,6 @@ if __name__ == "__main__":
     transformed_input = (inputs - torch.min(inputs)) / (
         torch.max(inputs) - torch.min(inputs)
     )
-    transformed_input = (
-        transformed_input - torch.mean(transformed_input)
-    ) / torch.std(transformed_input)
 
     prediction = model(transformed_input)["out"]
     draw_image_with_masks(inputs, prediction, alpha=0.2)
