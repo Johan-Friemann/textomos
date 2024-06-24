@@ -42,9 +42,9 @@
     "warp_density": 1.8,
     "matrix_elements": [6, 1, 17, 8],
     "matrix_ratios": [0.404, 0.481, 0.019, 0.096],
-    "matrix_density": 1.0,
-    "offset": [0.0, 0.0, 12.0],
-    "tilt": [-1.0, 2.0, -3.0],
+    "matrix_density": 1.08,
+    "offset": [-0.4, 0.0, 11.7],
+    "tilt": [-1.0, 2.0, -3.5],
     "rot_axis": "x",
     "sample_length_unit": "mm",
     
