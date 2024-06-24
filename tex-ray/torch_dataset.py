@@ -25,8 +25,7 @@ class TexRayDataset(Dataset):
 
     Keyword params:
         normalize (bool): Will first scale the data so it is in the range 0 to 1
-                          (min-max scaling), then the data is scaled such that
-                          it has mean 0 and standard deviation 1 (z-score).
+                          (min-max scaling).
     """
 
     def __init__(self, database_path, normalize=False):
