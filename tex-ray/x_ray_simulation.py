@@ -844,12 +844,14 @@ def neg_log_transform(corrected_projections, threshold):
     return neg_log_projections
 
 
-def _generate_sinograms(config_dict, queue):
+def _generate_sinograms(xray_config_dict, queue):
     """Perform an X-Ray CT scan of a sample. Do not use this function directly,
     please use generate_sinograms instead.
 
     Args:
-        config_dict (dictionary): A dictionary of tex_ray options.
+        xray_config_dict (dictionary): A (checked for X-Ray options) dictionary
+                                      of tex_ray options.
+
         queue (Queue): A queue that allows reading data from a process.
 
     Keyword args:
@@ -857,8 +859,6 @@ def _generate_sinograms(config_dict, queue):
     Returns:
         -
     """
-    xray_config_dict = check_xray_config_dict(config_dict)
-
     gvxr.createOpenGLContext()
 
     set_up_detector(
@@ -950,11 +950,14 @@ def generate_sinograms(config_dict):
                                         the shape (detector_rows,
                                         number_of_projections, detector_columns)
     """
+    # We must check options here because an exception in the child hangs queue.
+    xray_config_dict = check_xray_config_dict(config_dict)
+
     q = Queue(1)
     p = Process(
         target=_generate_sinograms,
         args=(
-            config_dict,
+            xray_config_dict,
             q,
         ),
     )
