@@ -103,10 +103,14 @@ def generate_config_dict(
     tex_ray_path = __file__.rstrip("batch_run.py")
 
     phases = ["weft", "warp", "matrix"]
+    mesh_paths = []
     for phase in phases:
-        config_dict[phase + "_path"] = os.path.join(
-            tex_ray_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
+        mesh_paths.append(
+            os.path.join(
+                tex_ray_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
+            )
         )
+    config_dict["mesh_paths"] = mesh_paths
     config_dict["reconstruction_output_path"] = os.path.join(
         tex_ray_path,
         "reconstructions/" + "reconstruction_" + str(sim_id) + ".tiff",
