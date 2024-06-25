@@ -193,7 +193,7 @@ def check_xray_config_dict(config_dict):
                             "The length of '"
                             + req_key
                             + "' must equal the length of '"
-                            + req_key.replace("ratios", "elements")
+                            + req_key.replace("densities", "elements")
                             + "'."
                         )
 
