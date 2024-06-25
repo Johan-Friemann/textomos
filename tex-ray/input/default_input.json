@@ -1,7 +1,9 @@
 {
-    "weft_path": "./tex-ray/meshes/weft.stl",
-    "warp_path": "./tex-ray/meshes/warp.stl",
-    "matrix_path": "./tex-ray/meshes/matrix.stl",
+    "mesh_paths": [
+        "./tex-ray/meshes/weft.stl",
+        "./tex-ray/meshes/warp.stl",
+        "./tex-ray/meshes/matrix.stl"
+    ],
     "reconstruction_output_path": "./tex-ray/reconstructions/reconstruction.tiff",
     "segmentation_output_path": "./tex-ray/segmentations/segmentation.tiff",
 
@@ -34,15 +36,9 @@
     "textile_resolution": 12,
 
 
-    "weft_elements": [6],
-    "weft_ratios": [1.0],
-    "weft_density": 1.8,
-    "warp_elements": [6],
-    "warp_ratios": [1.0],
-    "warp_density": 1.8,
-    "matrix_elements": [6, 1, 17, 8],
-    "matrix_ratios": [0.404, 0.481, 0.019, 0.096],
-    "matrix_density": 1.08,
+    "phase_elements": [[6], [6], [6, 1, 17, 8]],
+    "phase_ratios": [[1.0], [1.0], [0.404, 0.481, 0.019, 0.096]],
+    "phase_densities": [1.8, 1.8, 1.08],
     "offset": [-0.4, 0.0, 11.7],
     "tilt": [-1.0, 2.0, -3.5],
     "rot_axis": "x",
