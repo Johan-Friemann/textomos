@@ -205,9 +205,9 @@ def draw_image_with_masks(
         -
     """
     air_mask = (prediction.argmax(1) == 0)[0]
-    matrix_mask = (prediction.argmax(1) == 1)[0]
-    weft_mask = (prediction.argmax(1) == 2)[0]
-    warp_mask = (prediction.argmax(1) == 3)[0]
+    weft_mask = (prediction.argmax(1) == 1)[0]
+    warp_mask = (prediction.argmax(1) == 2)[0]
+    matrix_mask = (prediction.argmax(1) == 3)[0]
     masks = torch.stack([air_mask, matrix_mask, weft_mask, warp_mask])
 
     # draw_segmentation_masks requires RGB.
@@ -218,7 +218,7 @@ def draw_image_with_masks(
         rgb_input,
         masks=masks,
         alpha=alpha,
-        colors=["red", "blue", "green", "yellow"],
+        colors=["red", "green", "yellow", "blue"],
     )
 
     pil_image = v2.ToPILImage()(input_with_mask)
