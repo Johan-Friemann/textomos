@@ -168,7 +168,7 @@ def check_xray_config_dict(config_dict):
                         for l1, l2 in zip(args[-1], args[-2]):
                             if len(l1) != len(l2):
                                 raise ValueError(
-                                    "The length of the entries in'"
+                                    "The length of the entries in '"
                                     + req_key
                                     + "' must equal the length of the "
                                     + "corresponding entries in'"
