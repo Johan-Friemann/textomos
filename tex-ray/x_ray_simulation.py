@@ -41,23 +41,15 @@ def check_xray_config_dict(config_dict):
     """
     args = []
     req_keys = (
-        "weft_path",
-        "warp_path",
-        "matrix_path",
+        "mesh_paths",
+        "phase_elements",
+        "phase_ratios",
+        "phase_densities",
         "distance_source_origin",
         "distance_origin_detector",
         "detector_columns",
         "detector_rows",
         "detector_pixel_size",
-        "weft_elements",
-        "weft_ratios",
-        "weft_density",
-        "warp_elements",
-        "warp_ratios",
-        "warp_density",
-        "matrix_elements",
-        "matrix_ratios",
-        "matrix_density",
         "anode_angle",
         "energy_bin_width",
         "tube_voltage",
@@ -71,22 +63,14 @@ def check_xray_config_dict(config_dict):
     )
 
     req_types = (
-        str,
-        str,
-        str,
+        list,
+        list,
+        list,
+        list,
         float,
         float,
         int,
         int,
-        float,
-        list,
-        list,
-        float,
-        list,
-        list,
-        float,
-        list,
-        list,
         float,
         float,
         float,
@@ -130,39 +114,96 @@ def check_xray_config_dict(config_dict):
                     + "' is invalid. It should be > 0."
                 )
         elif req_type is list:
-            if req_key in ("weft_elements", "warp_elements", "matrix_elements"):
-                for i in args[-1]:
-                    if not isinstance(i, int):
-                        raise TypeError(
-                            "All entries of '" + req_key + "' must be integers."
-                        )
-                    if i < 0:
+            if req_key == "phase_elements":
+                for l in args[-1]:
+                    if not isinstance(l, list):
                         raise ValueError(
-                            "All entries of '" + req_key + "' must > 0."
+                            "All entries of '"
+                            + req_key
+                            + "' must be lists of integers."
                         )
+                    for i in l:
+                        if not isinstance(i, int):
+                            raise TypeError(
+                                "All entries of '"
+                                + req_key
+                                + "' must be lists of integers."
+                            )
+                        if i < 0:
+                            raise ValueError(
+                                "All entries in the lists in '"
+                                + req_key
+                                + "' must > 0."
+                            )
             # Ratios are always loaded after elements, so we can access [-2].
-            if req_key in ("weft_ratios", "warp_ratios", "matrix_ratios"):
+            if req_key == "phase_ratios":
+                for l in args[-1]:
+                    for d in l:
+                        if not isinstance(d, float):
+                            raise TypeError(
+                                "All entries of '"
+                                + req_key
+                                + "' must be lists of floats."
+                            )
+                        if not d > 0:
+                            raise ValueError(
+                                "All entries in the lists in '"
+                                + req_key
+                                + "' must > 0."
+                            )
+                        if sum(l) != 1.0:
+                            raise ValueError(
+                                "The entries of the lists in'"
+                                + req_key
+                                + "' must sum to 1.0"
+                            )
+                        if len(args[-1]) != len(args[-2]):
+                            raise ValueError(
+                                "The length of '"
+                                + req_key
+                                + "' must equal the length of '"
+                                + req_key.replace("ratios", "elements")
+                                + "'."
+                            )
+                        for l1, l2 in zip(args[-1], args[-2]):
+                            if len(l1) != len(l2):
+                                raise ValueError(
+                                    "The length of the entries in'"
+                                    + req_key
+                                    + "' must equal the length of the "
+                                    + "corresponding entries in'"
+                                    + req_key.replace("ratios", "elements")
+                                    + "'."
+                                )
+
+            if req_key == "phase_densities":
                 for d in args[-1]:
                     if not isinstance(d, float):
                         raise TypeError(
-                            "All entries of '" + req_key + "' must be floats."
+                            "All entries of '"
+                            + req_key
+                            + "' must be lists of floats."
                         )
-                    if not i > 0:
+                    if not d > 0:
                         raise ValueError(
                             "All entries of '" + req_key + "' must > 0."
                         )
-                if sum(args[-1]) != 1.0:
-                    raise ValueError(
-                        "The entries of '" + req_key + "' must sum to 1.0"
-                    )
-                if len(args[-1]) != len(args[-2]):
-                    raise ValueError(
-                        "The length of '"
-                        + req_key
-                        + "' must equal the length of '"
-                        + req_key.replace("ratios", "elements")
-                        + "'."
-                    )
+                    if len(args[-1]) != len(args[-2]):
+                        raise ValueError(
+                            "The length of '"
+                            + req_key
+                            + "' must equal the length of '"
+                            + req_key.replace("ratios", "elements")
+                            + "'."
+                        )
+
+            if req_key == "mesh_paths":
+                for s in args[-1]:
+                    if not isinstance(s, str):
+                        raise TypeError(
+                            "All entries of '" + req_key + "' must be strings."
+                        )
+
             if req_key in ("offset", "tilt"):
                 for d in args[-1]:
                     if not isinstance(d, float):
@@ -452,59 +493,33 @@ def set_up_xray_source(
 
 
 def set_up_sample(
-    weft_path,
-    weft_elements,
-    weft_ratios,
-    weft_density,
-    warp_path,
-    warp_elements,
-    warp_ratios,
-    warp_density,
-    matrix_path,
-    matrix_elements,
-    matrix_ratios,
-    matrix_density,
+    mesh_paths,
+    phase_elements,
+    phase_ratios,
+    phase_densities,
     rot_axis,
     offset,
     tilt,
     length_unit="m",
 ):
-    """Load yarn (weft and warp) and matrix geometries and X-Ray absorption
-       properties.
+    """Load sample geometry and X-Ray absorption properties. The last entry in
+    the lists defining the sample phases will be added as an outer surface, and
+    is thus appropriate for matrix.
 
     Args:
-        weft_path (string): The absolute path (including file name) to
-                            the weft geometry mesh file.
+        mesh_paths (lis[string]): The absolute paths (including file name)
+                                      to sample geometry mesh files.
 
-        weft_elements (list(int)): The element numbers of the constituents of
-                                   the weft material.
+        phase_elements (list(list(int))): The element numbers of the
+                                             constituents of the different
+                                             sample material phases.
 
-        weft_ratios (list(float)): The relative amount of the constituent
-                                    elements of the weft material.
+        phase_ratios (list(list(float))): The relative amount of the
+                                             constituent elements of the
+                                             different material phases.
 
-        weft_density (float): The density of the weft material in g/cm^3.
-
-        warp_path (string): The absolute path (including file name) to
-                            the warp geometry mesh file.
-
-        warp_elements (list(int)): The element numbers of the constituents of
-                                   the warp material.
-
-        warp_ratios (list(float)): The relative amount of the constituent
-                                   elements of the warp material.
-
-        warp_density (float): The density of the warp material in g/cm^3.
-
-        matrix_path (string): The absolute path (including file name) to
-                              the matrix geometry mesh file.
-
-        matrix_elements (list(int)): The element numbers of the constituents of
-                                     the matrix material.
-
-        matrix_ratios (list(float)): The relative amount of the constituent
-                                     elements of the matrix material.
-
-        matrix_density (float): The density of the matrix material in g/cm^3.
+        phase_densities (list(float)): The densities of the different
+                                          material phases in g/cm^3.
 
         rot_axis (str): An axis given in the sample's local coordinate fram.
                         The tomographic scan is performed around this axis,
@@ -550,19 +565,20 @@ def set_up_sample(
     tilt_axis = rot.apply(tilt / tilt_angle)
     offset = rot.apply(rot_tilt.apply(offset))
 
-    # Turn inputs into lists for use in zipped loops.
-    names = ["matrix", "weft", "warp"]
-    paths = [matrix_path, weft_path, warp_path]
-    elements = [matrix_elements, weft_elements, warp_elements]
-    ratios = [matrix_ratios, weft_ratios, warp_ratios]
-    densities = [matrix_density, weft_density, warp_density]
+    phase_names = [
+        "phase_" + str(i) for i in range(len(phase_densities))
+    ]
 
     # We load files for the first occurences here in order to load only once.
     for name, path, element, ratio, density in zip(
-        names, paths, elements, ratios, densities
+        phase_names,
+        mesh_paths,
+        phase_elements,
+        phase_ratios,
+        phase_densities,
     ):
         gvxr.loadMeshFile(name, path, length_unit, False)
-        if name == "matrix":
+        if name == "phase_" + str(len(phase_densities) - 1):
             gvxr.addPolygonMeshAsOuterSurface(name)
         else:
             gvxr.addPolygonMeshAsInnerSurface(name)
@@ -879,18 +895,10 @@ def _generate_sinograms(config_dict, queue):
         energy_unit=xray_config_dict["energy_unit"],
     )
     set_up_sample(
-        xray_config_dict["weft_path"],
-        xray_config_dict["weft_elements"],
-        xray_config_dict["weft_ratios"],
-        xray_config_dict["weft_density"],
-        xray_config_dict["warp_path"],
-        xray_config_dict["warp_elements"],
-        xray_config_dict["warp_ratios"],
-        xray_config_dict["warp_density"],
-        xray_config_dict["matrix_path"],
-        xray_config_dict["matrix_elements"],
-        xray_config_dict["matrix_ratios"],
-        xray_config_dict["matrix_density"],
+        xray_config_dict["mesh_paths"],
+        xray_config_dict["phase_elements"],
+        xray_config_dict["phase_ratios"],
+        xray_config_dict["phase_densities"],
         xray_config_dict["rot_axis"],
         xray_config_dict["offset"],
         xray_config_dict["tilt"],
