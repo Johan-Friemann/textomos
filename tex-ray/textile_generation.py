@@ -37,7 +37,6 @@ def check_layer2layer_config_dict(config_dict):
         "weft_width_to_spacing_ratio",
         "warp_width_to_spacing_ratio",
         "weft_to_warp_ratio",
-        "weave_pattern",
     )
 
     req_types = (
@@ -51,7 +50,6 @@ def check_layer2layer_config_dict(config_dict):
         float,
         float,
         float,
-        list,
     )
 
     for req_key, req_type in zip(req_keys, req_types):
@@ -75,49 +73,12 @@ def check_layer2layer_config_dict(config_dict):
                 + "."
             )
 
-        # Special exception raising for weave_pattern, and for paths.
-        if req_key == "weave_pattern":
-            for l in args[-1]:
-                if len(l) != 3:
-                    raise ValueError(
-                        "Each row of 'weave_pattern' must have length 3."
-                    )
-                for i in l:
-                    if not isinstance(i, int):
-                        raise TypeError(
-                            "All entries of 'weave_pattern' must be integers."
-                        )
-                    if l[0] < 0:
-                        raise ValueError(
-                            "The entries in first column of 'weave_pattern' "
-                            + "must >= 0."
-                        )
-                    if l[1] < 0:
-                        raise ValueError(
-                            "The entries in second column of 'weave_pattern' "
-                            + "must >= 0."
-                        )
-                    if l[0] >= config_dict.get("warp_yarns_per_layer"):
-                        raise ValueError(
-                            "The entries in first column of 'weave_pattern' "
-                            + "must < the value of 'warp_yarns_per_layer."
-                        )
-                    if l[1] >= config_dict.get("weft_yarns_per_layer"):
-                        raise ValueError(
-                            "The entries in second column of 'weave_pattern' "
-                            + "must < the value of 'weft_yarns_per_layer'."
-                        )
-                    if not l[2] in (-1, 1):
-                        raise ValueError(
-                            "The entries in the third column of '"
-                            + "weave_pattern' must be either 1 or -1."
-                        )
-        elif req_key == "mesh_paths":
+        if req_key == "mesh_paths":
             for s in args[-1]:
-                 if not isinstance(s, str):
-                        raise TypeError(
-                            "All entries of 'mesh_paths' must be strings."
-                        )
+                if not isinstance(s, str):
+                    raise TypeError(
+                        "All entries of 'mesh_paths' must be strings."
+                    )
         else:
             if not args[-1] > 0:
                 raise ValueError(
@@ -140,9 +101,15 @@ def check_layer2layer_config_dict(config_dict):
                     + "' is invalid. It should be < 1."
                 )
 
-    opt_keys = ("deform", "tiling", "shift_unit_cell", "textile_resolution")
-    def_vals = ([], [1, 1, 1], False, 20)
-    opt_types = (list, list, bool, int)
+    opt_keys = (
+        "deform",
+        "tiling",
+        "shift_unit_cell",
+        "textile_resolution",
+        "weave_pattern",
+    )
+    def_vals = ([], [1, 1, 1], False, 20, [])
+    opt_types = (list, list, bool, int, list)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -182,6 +149,44 @@ def check_layer2layer_config_dict(config_dict):
                     raise TypeError("All entries of 'tiling' must be ints.")
                 if args[-1][i] < 1:
                     raise ValueError("All entries of 'deform' must >= 1.")
+
+        # Special exception raising for weave_pattern, and for paths.
+        if opt_key == "weave_pattern":
+            for l in args[-1]:
+                if len(l) != 3:
+                    raise ValueError(
+                        "Each row of 'weave_pattern' must have length 3."
+                    )
+                for i in l:
+                    if not isinstance(i, int):
+                        raise TypeError(
+                            "All entries of 'weave_pattern' must be integers."
+                        )
+                    if l[0] < 0:
+                        raise ValueError(
+                            "The entries in first column of 'weave_pattern' "
+                            + "must >= 0."
+                        )
+                    if l[1] < 0:
+                        raise ValueError(
+                            "The entries in second column of 'weave_pattern' "
+                            + "must >= 0."
+                        )
+                    if l[0] >= config_dict.get("warp_yarns_per_layer"):
+                        raise ValueError(
+                            "The entries in first column of 'weave_pattern' "
+                            + "must < the value of 'warp_yarns_per_layer."
+                        )
+                    if l[1] >= config_dict.get("weft_yarns_per_layer"):
+                        raise ValueError(
+                            "The entries in second column of 'weave_pattern' "
+                            + "must < the value of 'weft_yarns_per_layer'."
+                        )
+                    if not l[2] in (-1, 1):
+                        raise ValueError(
+                            "The entries in the third column of '"
+                            + "weave_pattern' must be either 1 or -1."
+                        )
 
     return dict(zip(req_keys + opt_keys, args))
 
@@ -420,9 +425,7 @@ def create_layer2layer_sample(
     return Weft, Warp
 
 
-def write_layer_to_layer_sample_mesh(
-    weft, warp, weft_path, warp_path, matrix_path
-):
+def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
     """Write meshes for the weft, warp, and matrix from TexGen objects
        representing the weft and warp yarns. The meshes are saved as stl files.
 
@@ -550,42 +553,49 @@ def generate_woven_composite_sample(config_dict):
     Returns:
         -
     """
+    # Get type here since we use different dict checkers depending on type.
+    weave_type = config_dict.get("weave_type")
 
-    layer2layer_config_dict = check_layer2layer_config_dict(config_dict)
+    if weave_type == "layer2layer":
+        weave_config_dict = check_layer2layer_config_dict(config_dict)
 
-    Weft, Warp = create_layer2layer_sample(
-        layer2layer_config_dict["unit_cell_weft_length"],
-        layer2layer_config_dict["unit_cell_warp_length"],
-        layer2layer_config_dict["unit_cell_thickness"],
-        layer2layer_config_dict["weft_yarns_per_layer"],
-        layer2layer_config_dict["warp_yarns_per_layer"],
-        layer2layer_config_dict["number_of_yarn_layers"],
-        layer2layer_config_dict["weft_width_to_spacing_ratio"],
-        layer2layer_config_dict["warp_width_to_spacing_ratio"],
-        layer2layer_config_dict["weft_to_warp_ratio"],
-        layer2layer_config_dict["weave_pattern"],
-        layer2layer_config_dict["tiling"],
-        layer2layer_config_dict["deform"],
-        layer2layer_config_dict["shift_unit_cell"],
-        layer2layer_config_dict["textile_resolution"],
-    )
+        Weft, Warp = create_layer2layer_sample(
+            weave_config_dict["unit_cell_weft_length"],
+            weave_config_dict["unit_cell_warp_length"],
+            weave_config_dict["unit_cell_thickness"],
+            weave_config_dict["weft_yarns_per_layer"],
+            weave_config_dict["warp_yarns_per_layer"],
+            weave_config_dict["number_of_yarn_layers"],
+            weave_config_dict["weft_width_to_spacing_ratio"],
+            weave_config_dict["warp_width_to_spacing_ratio"],
+            weave_config_dict["weft_to_warp_ratio"],
+            weave_config_dict["weave_pattern"],
+            weave_config_dict["tiling"],
+            weave_config_dict["deform"],
+            weave_config_dict["shift_unit_cell"],
+            weave_config_dict["textile_resolution"],
+        )
+    else:
+        raise NotImplementedError(
+            "The weave type '" + str(weave_type) + "' is not available."
+        )
 
-    write_layer_to_layer_sample_mesh(
+    write_weave_mesh(
         Weft,
         Warp,
-        layer2layer_config_dict["mesh_paths"][0],
-        layer2layer_config_dict["mesh_paths"][1],
-        layer2layer_config_dict["mesh_paths"][2],
+        weave_config_dict["mesh_paths"][0],
+        weave_config_dict["mesh_paths"][1],
+        weave_config_dict["mesh_paths"][2],
     )
 
     boolean_difference_post_processing(
-        layer2layer_config_dict["mesh_paths"][0],
-        layer2layer_config_dict["mesh_paths"][1],
+        weave_config_dict["mesh_paths"][0],
+        weave_config_dict["mesh_paths"][1],
     )
 
     set_origin_to_barycenter(
-        layer2layer_config_dict["mesh_paths"][0],
-        layer2layer_config_dict["mesh_paths"][1],
-        layer2layer_config_dict["mesh_paths"][2],
+        weave_config_dict["mesh_paths"][0],
+        weave_config_dict["mesh_paths"][1],
+        weave_config_dict["mesh_paths"][2],
     )
     return None
