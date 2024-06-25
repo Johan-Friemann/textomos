@@ -27,9 +27,7 @@ def check_layer2layer_config_dict(config_dict):
     """
     args = []
     req_keys = (
-        "weft_path",
-        "warp_path",
-        "matrix_path",
+        "mesh_paths",
         "unit_cell_weft_length",
         "unit_cell_warp_length",
         "unit_cell_thickness",
@@ -43,9 +41,7 @@ def check_layer2layer_config_dict(config_dict):
     )
 
     req_types = (
-        str,
-        str,
-        str,
+        list,
         float,
         float,
         float,
@@ -116,7 +112,13 @@ def check_layer2layer_config_dict(config_dict):
                             "The entries in the third column of '"
                             + "weave_pattern' must be either 1 or -1."
                         )
-        elif not req_key in ["weft_path", "warp_path", "matrix_path"]:
+        elif req_key == "mesh_paths":
+            for s in args[-1]:
+                 if not isinstance(s, str):
+                        raise TypeError(
+                            "All entries of 'mesh_paths' must be strings."
+                        )
+        else:
             if not args[-1] > 0:
                 raise ValueError(
                     "The given value "
@@ -571,19 +573,19 @@ def generate_woven_composite_sample(config_dict):
     write_layer_to_layer_sample_mesh(
         Weft,
         Warp,
-        layer2layer_config_dict["weft_path"],
-        layer2layer_config_dict["warp_path"],
-        layer2layer_config_dict["matrix_path"],
+        layer2layer_config_dict["mesh_paths"][0],
+        layer2layer_config_dict["mesh_paths"][1],
+        layer2layer_config_dict["mesh_paths"][2],
     )
 
     boolean_difference_post_processing(
-        layer2layer_config_dict["weft_path"],
-        layer2layer_config_dict["warp_path"],
+        layer2layer_config_dict["mesh_paths"][0],
+        layer2layer_config_dict["mesh_paths"][1],
     )
 
     set_origin_to_barycenter(
-        layer2layer_config_dict["weft_path"],
-        layer2layer_config_dict["warp_path"],
-        layer2layer_config_dict["matrix_path"],
+        layer2layer_config_dict["mesh_paths"][0],
+        layer2layer_config_dict["mesh_paths"][1],
+        layer2layer_config_dict["mesh_paths"][2],
     )
     return None
