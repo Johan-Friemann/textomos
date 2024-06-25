@@ -5,11 +5,7 @@ from scipy.spatial.transform import Rotation as R
 
 """
 This file contains the routines for automatic labeling of a woven composite.
-The labeling is carried out through voxelization of the weft, warp, and and
-matrix meshes. Two types of voxelizations can be performed. The first one is
-performed on the meshes in the same sample configuration (including  offset etc)
-as the virtual x-ray scan. The second type contains only one highly
-resolved unit-cell.
+The labeling is carried out through voxelization of the constituent meshes.
 
 Voxelization is performed in parallel on the GPU.
 """
@@ -38,9 +34,7 @@ def check_segmentation_config_dict(config_dict):
     """
     args = []
     req_keys = (
-        "weft_path",
-        "warp_path",
-        "matrix_path",
+        "mesh_paths",
         "distance_source_origin",
         "distance_origin_detector",
         "detector_columns",
@@ -52,9 +46,7 @@ def check_segmentation_config_dict(config_dict):
     )
 
     req_types = (
-        str,
-        str,
-        str,
+        list,
         float,
         float,
         int,
@@ -174,8 +166,8 @@ def check_segmentation_config_dict(config_dict):
 def segment_reconstruction(config_dict):
     """Label the reconstructed volume of a virtual x-ray tomographic scan.
        The scanned meshes are voxelized in the same reference frame as the
-       reconstruction. Matrix material is labelled as 1, weft material is
-       labelled as 2, and warp material is labelled as 3.
+       reconstruction. Air is labelled as 0. Other phases are labeled with
+       increasing numbers in the order they appear in the config.
 
     Args:
         config_dict (dictionary): A dictionary of tex_ray options.
@@ -241,15 +233,9 @@ def segment_reconstruction(config_dict):
     rot = R.from_rotvec(angle * axis * np.pi / 180)
     rot_tilt = R.from_rotvec(tilt * np.pi / 180)
 
-    paths = [
-        segmentation_config_dict["matrix_path"],
-        segmentation_config_dict["weft_path"],
-        segmentation_config_dict["warp_path"],
-    ]
-
     triangles = []
     num_triangles = []
-    for path in paths:
+    for path in segmentation_config_dict["mesh_paths"]:
         mesh = meshio.read(path)
         vertex_coords = mesh.points
         connectivity = mesh.cells[0].data
@@ -260,11 +246,16 @@ def segment_reconstruction(config_dict):
         num_triangles.append(len(triangle) // 3)
 
     vox = cp.zeros(num_voxels * num_voxels * num_voxels, dtype=cp.int32)
-    bit_flags = [5, 3, 2] # Results in 5, 6, 7 after kernel bit xor.
-    for i in range(3):
+    # Flags are powers of 2: 1, 2, 4, ... one for each phase (excluding air).
+    bit_flags = [
+        2**i for i in range(len(segmentation_config_dict["mesh_paths"]))
+    ]
+    for i in range(len(bit_flags)):
         rotated_tri = rot.apply(triangles[i])
         tilted_tri = rot_tilt.apply(rotated_tri)
-        offset_tri = (tilted_tri + offset).flatten() # Flatten here, not on gpu.
+        offset_tri = (
+            tilted_tri + offset
+        ).flatten()  # Flatten here, not on gpu.
         gpu_triangles = cp.asarray(offset_tri, dtype=cp.float32)
         vox_kernel(
             (num_triangles[i],),
@@ -277,6 +268,13 @@ def segment_reconstruction(config_dict):
                 vox,
             ),
         )
-
-    vox = vox.reshape(num_voxels, num_voxels, num_voxels) & 3 # Makes it 1, 2, 3
-    return vox.get().astype(np.uint8)
+    vox = (vox & -vox) # Get least significant bit: remove outer overwrite.
+    out = cp.zeros_like(vox)
+    
+    # Find position of most significant bit: from powers of 2 to 0, 1, 2, 3, ...
+    while cp.size(cp.nonzero(vox)[0]) :
+        out[cp.nonzero(vox)[0]] += 1
+        vox >>= 1
+        
+    out = out.reshape(num_voxels, num_voxels, num_voxels)
+    return out.get().astype(np.uint8)
