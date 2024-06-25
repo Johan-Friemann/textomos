@@ -8,6 +8,7 @@
     "segmentation_output_path": "./tex-ray/segmentations/segmentation.tiff",
 
 
+    "weave_type": "layer2layer",
     "shift_unit_cell": true,
     "unit_cell_weft_length": 21.5,
     "unit_cell_warp_length": 6.5,
