@@ -107,9 +107,10 @@ def check_layer2layer_config_dict(config_dict):
         "shift_unit_cell",
         "textile_resolution",
         "weave_pattern",
+        "cut_mesh",
     )
-    def_vals = ([], [1, 1, 1], False, 20, [])
-    opt_types = (list, list, bool, int, list)
+    def_vals = ([], [1, 1, 1], False, 20, [], "weft")
+    opt_types = (list, list, bool, int, list, str)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -150,7 +151,7 @@ def check_layer2layer_config_dict(config_dict):
                 if args[-1][i] < 1:
                     raise ValueError("All entries of 'deform' must >= 1.")
 
-        # Special exception raising for weave_pattern, and for paths.
+        # Special exception raising for weave_pattern and cut_mesh
         if opt_key == "weave_pattern":
             for l in args[-1]:
                 if len(l) != 3:
@@ -187,6 +188,11 @@ def check_layer2layer_config_dict(config_dict):
                             "The entries in the third column of '"
                             + "weave_pattern' must be either 1 or -1."
                         )
+        if opt_key == "cut_mesh":
+            if args[-1] not in ["weft", "warp"]:
+                raise ValueError(
+                    "The option 'cut_mesh' can only be 'weft' or 'warp'."
+                )
 
     return dict(zip(req_keys + opt_keys, args))
 
@@ -597,7 +603,7 @@ def generate_woven_composite_sample(config_dict):
     boolean_difference_post_processing(
         weave_config_dict["mesh_paths"][0],
         weave_config_dict["mesh_paths"][1],
-        weave_config_dict["cut_mesh"]
+        weave_config_dict["cut_mesh"],
     )
 
     set_origin_to_barycenter(
