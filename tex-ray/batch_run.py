@@ -1,5 +1,4 @@
 import os
-import copy
 import signal
 import time
 import sys
@@ -7,7 +6,6 @@ from multiprocessing import Process
 import numpy as np
 import random
 import tifffile
-import json
 from x_ray_simulation import generate_sinograms
 from tomographic_reconstruction import perform_tomographic_reconstruction
 from textile_generation import generate_woven_composite_sample
@@ -26,8 +24,7 @@ database is created.
 def generate_weave_pattern(
     weft_yarns_per_layer,
     warp_yarns_per_layer,
-    base_pattern,
-    domain_randomization=0.0,
+    weave_complexity,
 ):
     """Generate a random weave pattern.
 
@@ -36,28 +33,14 @@ def generate_weave_pattern(
 
         warp_yarns_per_layer (int): The number of warp yarns per weave layer.
 
-        base_pattern (list[list[int]]): The base config weave pattern used to
-                                        gauge the weave complexity.
-
+        weave_complexity (int): The number of cross overs per unit cell.
     Keyword args:
-        domain_randomization (float): A number larger or equal to  0 and less
-                                      than 1 that determines the amount of
-                                      domain randomization to be appl. to base
-                                      weave complexity.
+        -
 
     Returns:
         weave_pattern (list[list[int]]): A weave pattern compatible with the
                                          generate_woven_composite_sample.
     """
-    weave_complexity = int(
-        np.clip(
-            len(base_pattern)
-            * (1 - domain_randomization * (1 - 2 * np.random.rand())),
-            1,
-            None,
-        )
-    )
-
     # list all possible cross-over coordinates and shuffle for random weave
     possible_crossover = []
     for i in range(warp_yarns_per_layer):
@@ -74,43 +57,375 @@ def generate_weave_pattern(
     return weave_pattern
 
 
+def generate_layer2layer_config(
+    width_to_spacing_ratio=[0.85, 0.98],
+    weft_to_warp_ratio=[0.2, 0.8],
+    yarns_per_layer=[2, 10],
+    unit_cell_side_length=[5.0, 22.0],
+    unit_cell_thickness=[2.0, 6.0],
+    weave_complexity=[4, 12],
+    tiling=[1, 3],
+    shift_unit_cell=True,
+    deform_offset=[0.025, 0.075],
+    deform_scaling=[2.5, 7.5],
+    deform_rotate=[2.5, 7.5],
+    textile_resolution=12,
+    cut_mesh=0.5,
+    phase_elements=[[6], [6], [6, 1, 17, 8]],
+    phase_ratios=[[1.0], [1.0], [0.404, 0.481, 0.019, 0.096]],
+    phase_densities=[[1.78, 1.82], [1.78, 1.82], [1.06, 1.10]],
+    **kwargs  # Needed to call by dict (will contain more than these args)
+):
+    """Generate options pertaining the geometry (weave, yarn size, etc.) and the
+       material properties of a layer2layer composite sample with domain
+       randomization.
+
+    Args:
+        -
+
+    Keyword args:
+        width_to_spacing_ratio (list[float]): Lower and upper bound for
+                                              weft/warp width to spacing ratio.
+
+        weft_to_warp_ratio (list[float]): Lower and upper bound for weft to warp
+                                          ratio.
+
+        yarns_per_layer (list[int]): Lower and upper bound for weft/warp number
+                                     of yarns per layer.
+
+        unit_cell_side_length (list[float]): Lower and upper bound for the side
+                                             length of unit cellin the yarn
+                                             plane.
+
+        unit_cell_thickness (list[float]): Lower and upper bound for unit cell
+                                           thickness.
+
+        weave_complexity (list[int]): Lower and upper bound for number of push
+                                      up/down operations inside a unit cell.
+
+        tiling (list[int]): Lower and upper bound for number of unit cell
+                            repetitions in any direction.
+
+        shift_unit_cell (bool): Will randomly shift the unit cell between
+                                z-layer tiles.
+
+        deform_offset (list(float)): Lower and upper bound for cross section
+                                      offset deformation.
+
+        deform_scaling (list(float)): Lower and upper bound for cross section
+                                      scaling deformation.
+
+        deform_rotate (list(float)): Lower and upper bound for cross section
+                                     rotation deformation.
+
+        textile_resolution (int): Texgen mesh resolution.
+
+        cut_mesh (float): The probability to cut warp out of weft (does the
+                          opposite otherwise). Should be between 0 and 1.
+
+        phase_elements (list(list(int))): The element numbers of the
+                                             constituents of the different
+                                             sample material phases.
+
+        phase_ratios (list(list(float))): The relative amount of the
+                                             constituent elements of the
+                                             different material phases.
+
+        phase_densities (list(list(float))): The upper and lower bounds for the
+                                             densities of the different phases.
+
+    Returns:
+        sample_config_dict (dict): A dict of the generated geometry options.
+    """
+    sample_config_dict = {}
+    sample_config_dict["weave_type"] = "layer2layer"
+    sample_config_dict["shift_unit_cell"] = shift_unit_cell
+    sample_config_dict["weft_yarns_per_layer"] = np.random.randint(
+        yarns_per_layer[0], high=yarns_per_layer[1]
+    )
+    sample_config_dict["warp_yarns_per_layer"] = np.random.randint(
+        yarns_per_layer[0], high=yarns_per_layer[1]
+    )
+    sample_config_dict["weft_to_warp_ratio"] = weft_to_warp_ratio[
+        0
+    ] + np.random.rand() * (weft_to_warp_ratio[1] - weft_to_warp_ratio[0])
+    sample_config_dict["weft_width_to_spacing_ratio"] = width_to_spacing_ratio[
+        0
+    ] + np.random.rand() * (
+        width_to_spacing_ratio[1] - width_to_spacing_ratio[0]
+    )
+    sample_config_dict["warp_width_to_spacing_ratio"] = width_to_spacing_ratio[
+        0
+    ] + np.random.rand() * (
+        width_to_spacing_ratio[1] - width_to_spacing_ratio[0]
+    )
+    sample_config_dict["unit_cell_weft_length"] = unit_cell_side_length[
+        0
+    ] + np.random.rand() * (unit_cell_side_length[1] - unit_cell_side_length[0])
+    sample_config_dict["unit_cell_warp_length"] = unit_cell_side_length[
+        0
+    ] + np.random.rand() * (unit_cell_side_length[1] - unit_cell_side_length[0])
+    sample_config_dict["unit_cell_thickness"] = unit_cell_thickness[
+        0
+    ] + np.random.rand() * (unit_cell_thickness[1] - unit_cell_thickness[0])
+    sample_config_dict["weave_pattern"] = generate_weave_pattern(
+        sample_config_dict["weft_yarns_per_layer"],
+        sample_config_dict["warp_yarns_per_layer"],
+        np.random.randint(weave_complexity[0], high=weave_complexity[1]),
+    )
+    sample_config_dict["tiling"] = [
+        np.random.randint(tiling[0], high=tiling[1]),
+        np.random.randint(tiling[0], high=tiling[1]),
+        np.random.randint(tiling[0], high=tiling[1]),
+    ]
+    sample_config_dict["deform"] = [
+        deform_scaling[0]
+        + np.random.rand() * (deform_scaling[1] - deform_scaling[0]),
+        deform_scaling[0]
+        + np.random.rand() * (deform_scaling[1] - deform_scaling[0]),
+        deform_rotate[0]
+        + np.random.rand() * (deform_rotate[1] - deform_rotate[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+        deform_scaling[0]
+        + np.random.rand() * (deform_scaling[1] - deform_scaling[0]),
+        deform_scaling[0]
+        + np.random.rand() * (deform_scaling[1] - deform_scaling[0]),
+        deform_rotate[0]
+        + np.random.rand() * (deform_rotate[1] - deform_rotate[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+        deform_offset[0]
+        + np.random.rand() * (deform_offset[1] - deform_offset[0]),
+    ]
+    sample_config_dict["textile_resolution"] = textile_resolution
+    if np.random.rand() < cut_mesh:
+        sample_config_dict["cut_mesh"] = "weft"
+    else:
+        sample_config_dict["cut_mesh"] = "warp"
+    sample_config_dict["phase_elements"] = phase_elements
+    sample_config_dict["phase_ratios"] = phase_ratios
+    sample_config_dict["phase_densities"] = [
+        phase_densities[0][0]
+        + np.random.rand() * (phase_densities[0][1] - phase_densities[0][0]),
+        phase_densities[1][0]
+        + np.random.rand() * (phase_densities[1][1] - phase_densities[1][0]),
+        phase_densities[2][0]
+        + np.random.rand() * (phase_densities[2][1] - phase_densities[2][0]),
+    ]
+    return sample_config_dict
+
+
+def generate_xray_config(
+    offset=[[-5.0, 5.0], [-5.0, 5.0], [-12.0, 12.0]],
+    tilt=[[-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0]],
+    detector_pixel_size=[0.02875, 0.03875],
+    detector_rows=2048,
+    distance_source_origin=[40.0, 80.0],
+    distance_origin_detector=[60.0, 100.0],
+    number_of_projections=[301, 1301],
+    scanning_angle=[260, 460],
+    anode_angle=[1.0, 23.0],
+    tube_voltage=[10.0, 70.0],
+    tube_power=[4.0, 16.0],
+    filter_thickness=[1.0, 3.0],
+    exposure_time=[1.0, 9.0],
+    num_reference=[10, 30],
+    filter_material="Al",
+    target_material="W",
+    energy_bin_width=0.5,
+    photonic_noise=True,
+    display=True,
+    binning=4,
+    threshold=0.000000001,
+    rot_axis="x",
+    sample_length_unit="mm",
+    scanner_length_unit="mm",
+    energy_unit="keV",
+    sample_rotation_direction=1,
+    reconstruction_algorithm="FDK_CUDA",
+    **kwargs  # Needed to call by dict (will contain more than these args)
+):
+    """Generate options pertaining the X-Ray simulation (scanner properties,
+       sample placement, etc.) with domain randomization.
+
+    Args:
+        -
+
+    Keyword args:
+        offset (list(list(float))): Lower and upper bounds of sample position
+                                    offsets.
+
+        tilt (list(list(float))): Lower and upper bounds of sample rotation
+                                  offsets.
+
+        detector_pixel_size (list(float)): Lower and upper bounds of detector
+                                           pixel size.
+
+        detector_rows (int): The number of detector pixels per row/column.
+
+        distance_source_origin (list(float)): Lower and upper bound for the
+                                              distance between X-Ray source and
+                                              center of rotation.
+
+        distance_source_origin (list(float)): Lower and upper bound for the
+                                              distance between the center of
+                                              rotation and the X-Ray detector.
+
+        number_of_projections (list(int)): Lower and upper bounds of number of
+                                           X-Ray projections.
+
+        scanning_angle (list(float)): Lower and upper bounds of tomography scanning
+                                      scanning angle in degrees.
+
+        anode_angle (list(float)):  Lower and upper bounds of X-Ray tube anode
+                                    angle.
+
+        tube_voltage (list(float)): Lower and upper bounds of X-Ray tube voltage
+                                    in kV.
+
+        tube_power (list(float)): Lower and upper bounds of X-Ray tube power in
+                                  W.
+
+        filter_thickness (list(float)): Lower and upper bounds of X-Ray filter
+                                        thickness.
+
+        exposure_time (list(float)): Lower and upper bounds of X-Ray exposure
+                                     time in seconds.
+
+        num_reference (list(int)): Lower and upper bounds of number of reference
+                                   images to use for white field average.
+
+        filter_material (str): The chemical symbol of the filter material.  
+
+        target_material (str): The chemical symbol of the target material.
+
+        energy_bin_width (float): The width of the spectrum bins in keV.                      
+
+        binning (int): The detector binning value.
+
+        threshold (float): Threshold value to use while performing negative log
+                           transform.
+
+        rot_axis (str): Axis in mesh coordinates to rotate around while
+                        scanning.
+
+        sample_length_unit (str): The unit of length to use for setting up the
+                                  sample (unit used in mesh). Should in
+                                  principle be "mm".
+
+        scanner_length_unit (str): The unit of length to use for setting up the
+                                   scanner. Should in principle be "mm".
+
+        energy_unit (str): The unit for X-Ray photon energy. Should in principle
+                           be "keV" for spekpy compatibility.
+
+        sample_rotation_direction (int): The sample rotation direction, should
+                                         in principle always be 1.
+
+        reconstruction_algorithm (str): The ASTRA tomographic reconstruction
+                                        algorithm to use.
+
+
+    Returns:
+        x_ray_config_dict (dict): A dictionary of the generated X-Ray options.
+
+    """
+    x_ray_config_dict = {}
+    x_ray_config_dict["tiling"] = [
+        offset[0][0] + np.random.rand() * (offset[0][1] - offset[0][0]),
+        offset[1][0] + np.random.rand() * (offset[1][1] - offset[1][0]),
+        offset[2][0] + np.random.rand() * (offset[2][1] - offset[2][0]),
+    ]
+    x_ray_config_dict["tilt"] = [
+        tilt[0][0] + np.random.rand() * (tilt[0][1] - tilt[0][0]),
+        tilt[1][0] + np.random.rand() * (tilt[1][1] - tilt[1][0]),
+        tilt[2][0] + np.random.rand() * (tilt[2][1] - tilt[2][0]),
+    ]
+    x_ray_config_dict["detector_pixel_size"] = detector_pixel_size[
+        0
+    ] + np.random.rand() * (detector_pixel_size[1] - detector_pixel_size[0])
+    x_ray_config_dict["detector_rows"] = detector_rows
+    x_ray_config_dict["detector_columns"] = detector_rows
+    x_ray_config_dict["distance_source_origin"] = distance_source_origin[
+        0
+    ] + np.random.rand() * (
+        distance_source_origin[1] - distance_source_origin[0]
+    )
+    x_ray_config_dict["distance_origin_detector"] = distance_origin_detector[
+        0
+    ] + np.random.rand() * (
+        distance_origin_detector[1] - distance_origin_detector[0]
+    )
+    x_ray_config_dict["number_of_projections"] = np.random.randint(
+        number_of_projections[0], high=number_of_projections[1]
+    )
+    x_ray_config_dict["scanning_angle"] = scanning_angle[
+        0
+    ] + np.random.rand() * (scanning_angle[1] - scanning_angle[0])
+    x_ray_config_dict["anode_angle"] = anode_angle[0] + np.random.rand() * (
+        anode_angle[1] - anode_angle[0]
+    )
+    x_ray_config_dict["tube_voltage"] = tube_voltage[0] + np.random.rand() * (
+        tube_voltage[1] - tube_voltage[0]
+    )
+    x_ray_config_dict["tube_power"] = tube_power[0] + np.random.rand() * (
+        tube_power[1] - tube_power[0]
+    )
+    x_ray_config_dict["filter_thickness"] = filter_thickness[
+        0
+    ] + np.random.rand() * (filter_thickness[1] - filter_thickness[0])
+    x_ray_config_dict["exposure_time"] = exposure_time[0] + np.random.rand() * (
+        exposure_time[1] - exposure_time[0]
+    )
+    x_ray_config_dict["num_reference"] = np.random.randint(
+        num_reference[0], high=num_reference[1]
+    )
+    x_ray_config_dict["filter_material"] = filter_material
+    x_ray_config_dict["target_material"] = target_material
+    x_ray_config_dict["energy_bin_width"] = energy_bin_width
+    x_ray_config_dict["photonic_noise"] = photonic_noise
+    x_ray_config_dict["display"] = display
+    x_ray_config_dict["binning"] = binning
+    x_ray_config_dict["threshold"] = threshold
+    x_ray_config_dict["rot_axis"] = rot_axis
+    x_ray_config_dict["sample_length_unit"] = sample_length_unit
+    x_ray_config_dict["scanner_length_unit"] = scanner_length_unit
+    x_ray_config_dict["energy_unit"] = energy_unit
+    x_ray_config_dict["sample_rotation_direction"] = sample_rotation_direction
+    x_ray_config_dict["reconstruction_algorithm"] = reconstruction_algorithm
+
+    return x_ray_config_dict
+
+
 def generate_config_dict(
     sim_id,
-    base_config,
-    domain_randomization=0.0,
+    params={},
 ):
     """Generate a valid Tex-Ray config dictionary associated with a sim-id.
-    The dictionary is generated based on a given config file, and domain
-    randomization can be added.
 
     Args:
         sim_id (int): The simulation id to use for the config dictionary.
 
-        base_config (dict): A valid Tex-Ray config dict that will be used as the
-                            template for generating the configuration dict.
+        params (dict): Dictionary containing simulation parameters.
+                       Domain randomizable parameters are given as an lower and
+                       upper bound.
 
     Keyword args:
-        domain_randomization (float): A number larger or equal to  0 and less
-                                      than 1 that determines the amount of
-                                      domain randomization to be appl. to base
-                                      config.
+        -
 
     Returns:
-        config_dict (dict): A list of the generated samples config dicts.
+        config_dict (dict): A dictionary of Tex-Ray options.
     """
-    config_dict = copy.deepcopy(base_config)
-
+    config_dict = {}
     tex_ray_path = __file__.rstrip("batch_run.py")
-
-    phases = ["weft", "warp", "matrix"]
-    mesh_paths = []
-    for phase in phases:
-        mesh_paths.append(
-            os.path.join(
-                tex_ray_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
-            )
-        )
-    config_dict["mesh_paths"] = mesh_paths
+    # We load these paths here since they are identical for all weave types.
     config_dict["reconstruction_output_path"] = os.path.join(
         tex_ray_path,
         "reconstructions/" + "reconstruction_" + str(sim_id) + ".tiff",
@@ -120,106 +435,33 @@ def generate_config_dict(
         "segmentations/" + "segmentation_" + str(sim_id) + ".tiff",
     )
 
-    if domain_randomization == 0.0:
-        return config_dict
-
-    bounded_floats = [
-        "weft_width_to_spacing_ratio",
-        "warp_width_to_spacing_ratio",
-        "weft_to_warp_ratio",
-    ]
-    skipped_floats = ["scanning_angle", "energy_bin_width", "threshold"]
-    skipped_ints = [
-        "sample_rotation_direction",
-        "textile_resolution",
-        "detector_rows",
-        "detector_columns",
-        "binning",
-        "num_reference",
-    ]
-    # We avoid the possibility of negative numbers by scaling positive numbers.
-    for key in config_dict.keys():
-        if type(config_dict[key]) is float and key not in skipped_floats:
-            if key in bounded_floats:
-                config_dict[key] = np.clip(
-                    config_dict[key]
-                    * (1 - domain_randomization * (1 - 2 * np.random.rand())),
-                    0.01,
-                    0.99,
-                )
-            else:
-                config_dict[key] = config_dict[key] * (
-                    1 - domain_randomization * (1 - 2 * np.random.rand())
-                )
-        elif type(config_dict[key]) is int and key not in skipped_ints:
-            config_dict[key] = int(
-                np.clip(
-                    config_dict[key]
-                    * (1 - domain_randomization * (1 - 2 * np.random.rand())),
-                    1,
-                    None,
+    if params.get("weave_type", "layer2layer") == "layer2layer":
+        phases = ["weft", "warp", "matrix"]
+        mesh_paths = []
+        for phase in phases:
+            mesh_paths.append(
+                os.path.join(
+                    tex_ray_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
                 )
             )
+        config_dict["mesh_paths"] = mesh_paths
+        config_dict.update(generate_layer2layer_config(**params))
 
-    config_dict["weave_pattern"] = generate_weave_pattern(
-        config_dict["weft_yarns_per_layer"],
-        config_dict["warp_yarns_per_layer"],
-        config_dict["weave_pattern"],
-        domain_randomization=domain_randomization,
-    )
-
-    deform = config_dict["deform"]
-    randomized_deform = []
-    for param in deform:
-        randomized_deform.append(
-            param * (1 - domain_randomization * (1 - 2 * np.random.rand()))
-        )
-    config_dict["deform"] = randomized_deform
-
-    # Subtact three to make [1,1,1] correspond to zero tiling complexity.
-    tiling_complexity = int(
-        (sum(config_dict["tiling"]) - 3)
-        * (1 - domain_randomization * (1 - 2 * np.random.rand()))
-    )
-    tiling = [1, 1, 1]
-    while tiling_complexity > 0:
-        idx = random.randint(0, 2)
-        tiling[idx] += 1
-        tiling_complexity -= 1
-    config_dict["tiling"] = tiling
-
-    # We cant treat tilt and offset the same way as the other parameters during
-    # domain randomization.
-    config_dict["tilt"] = [
-        (np.random.rand() * 2 - 1) * 3,
-        (np.random.rand() * 2 - 1) * 3,
-        (np.random.rand() * 2 - 1) * 3,
-    ]
-    config_dict["offset"] = [
-        (np.random.rand() * 2 - 1) * 3,
-        (np.random.rand() * 2 - 1) * 3,
-        (np.random.rand() * 2 - 1) * 3,
-    ]
+    config_dict.update(generate_xray_config(**params))
 
     return config_dict
 
 
-def generate_woven_composite_sample_batch(
-    num_samples, base_config, domain_randomization=0.0
-):
+def generate_woven_composite_sample_batch(num_samples, params={}):
     """Perform a batch run of generate_woven_composite_sample.
 
     Args:
         num_samples (int): The number of samples to generate.
 
-        base_config (dict): A valid Tex-Ray config dict that will be used as the
-                            template for generating samples.
-
     Keyword args:
-        domain_randomization (float): A number larger or equal to  0 and less
-                                      than 1 that determines the amount of
-                                      domain randomization to be appl. to base
-                                      config.
+        params (dict): Dictionary containing simulation parameters.
+                       Domain randomizable parameters are given as an lower and
+                       upper bound.
 
     Returns:
         configs (list[dict]): A list of the generated samples config dicts.
@@ -234,7 +476,7 @@ def generate_woven_composite_sample_batch(
     exit_codes = []
 
     for i in range(num_samples):
-        config = generate_config_dict(i, base_config, domain_randomization)
+        config = generate_config_dict(i, params=params)
         configs.append(config)
         job = Process(target=generate_woven_composite_sample, args=(config,))
         job.start()
@@ -299,10 +541,9 @@ def clean_up_batch_files(num_samples):
 
 
 def run_batch(
-    master_config,
     data_base_path,
     num_process=1,
-    domain_randomization=0.0,
+    params={},
     chunk_size=10,
 ):
     """Run a batch of tex-ray simulations based on a config dictionary, and
@@ -320,9 +561,9 @@ def run_batch(
         num_process (int): The number of processes to run in the batch. Decides
                            the number of samples that is produced per batch.
 
-        domain_randomization (float): A number between 0.0 and 1.0 that
-                                      determines the percentual domain
-                                      randomization to be applied to the sample.
+        params (dict): Dictionary containing simulation parameters.
+                       Domain randomizable parameters are given as an lower and
+                       upper bound.
 
         chunk_size (int): The chunk size. This argument is only used when
                           creating a new database.
@@ -334,7 +575,7 @@ def run_batch(
     t0 = time.time()
 
     config_dicts, exit_codes = generate_woven_composite_sample_batch(
-        num_process, master_config, domain_randomization
+        num_process, params=params
     )
 
     num_success = 0
@@ -383,24 +624,19 @@ def run_batch(
 
 
 if __name__ == "__main__":
-
-    config_path = "./tex-ray/input/default_input.json"
-    database_path = "./tex-ray/dbase"
+    database_path = "./tex-ray/database"
     num_process = 10
     chunk_size = 5
-    domain_randomization = 0.2
-
-    with open(config_path) as f:
-        default_config = json.load(f)
+    params = {}
 
     while True:
         job = (
             Process(  # We wrap each batch in a process to prevent memory leak.
                 target=run_batch,
-                args=(default_config, database_path),
+                args=(database_path),
                 kwargs={
                     "num_process": num_process,
-                    "domain_randomization": domain_randomization,
+                    "params": params,
                     "chunk_size": chunk_size,
                 },
             )
