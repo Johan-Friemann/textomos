@@ -464,9 +464,9 @@ def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
     return None
 
 
-def boolean_difference_post_processing(weft_path, warp_path):
-    """Use PyMeshLab's boolean difference method to cut the warp yarns out of
-       the weft yarns to resolve mesh overlap.
+def boolean_difference_post_processing(weft_path, warp_path, cut_mesh="weft"):
+    """Use PyMeshLab's boolean difference method to cut one yarn type out of
+       the other to resolve mesh overlap. Will overwrite the mesh that is cut.
 
     Args:
         weft_path (str): The absolute path (including file name) to the weft
@@ -477,7 +477,8 @@ def boolean_difference_post_processing(weft_path, warp_path):
 
 
     Keyword args:
-        -
+        cut_mesh (str): Will cut the warp out of the weft if "weft", and cut
+                        weft out of the warp if "warp".
 
     Returns:
         -
@@ -485,8 +486,12 @@ def boolean_difference_post_processing(weft_path, warp_path):
     mesh_set = pml.MeshSet()
     mesh_set.load_new_mesh(warp_path)
     mesh_set.load_new_mesh(weft_path)
-    mesh_set.generate_boolean_difference(first_mesh=1, second_mesh=0)
-    mesh_set.save_current_mesh(weft_path)
+    if cut_mesh == "weft":
+        mesh_set.generate_boolean_difference(first_mesh=1, second_mesh=0)
+        mesh_set.save_current_mesh(weft_path)
+    elif cut_mesh == "warp":
+        mesh_set.generate_boolean_difference(first_mesh=0, second_mesh=1)
+        mesh_set.save_current_mesh(warp_path)
     return None
 
 
@@ -591,6 +596,7 @@ def generate_woven_composite_sample(config_dict):
     boolean_difference_post_processing(
         weave_config_dict["mesh_paths"][0],
         weave_config_dict["mesh_paths"][1],
+        weave_config_dict["cut_mesh"]
     )
 
     set_origin_to_barycenter(
