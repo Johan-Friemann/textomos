@@ -464,7 +464,7 @@ def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
     return None
 
 
-def boolean_difference_post_processing(weft_path, warp_path, cut_mesh="weft"):
+def boolean_difference_post_processing(weft_path, warp_path, cut_mesh):
     """Use PyMeshLab's boolean difference method to cut one yarn type out of
        the other to resolve mesh overlap. Will overwrite the mesh that is cut.
 
@@ -475,10 +475,11 @@ def boolean_difference_post_processing(weft_path, warp_path, cut_mesh="weft"):
         warp_path (str): The absolute path (including file name) to the warp
                          mesh.
 
-
-    Keyword args:
         cut_mesh (str): Will cut the warp out of the weft if "weft", and cut
                         weft out of the warp if "warp".
+
+        Keyword args:
+            -
 
     Returns:
         -
