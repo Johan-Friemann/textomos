@@ -235,9 +235,23 @@ def check_xray_config_dict(config_dict):
         "photonic_noise",
         "num_reference",
         "threshold",
+        "sample_rotation_direction",
     )
-    opt_types = (int, str, float, str, str, str, str, bool, bool, int, float)
-    def_vals = (1, "mm", 0.0, "Al", "W", "keV", "mm", True, True, 100, 1e-8)
+    opt_types = (
+        int,
+        str,
+        float,
+        str,
+        str,
+        str,
+        str,
+        bool,
+        bool,
+        int,
+        float,
+        int,
+    )
+    def_vals = (1, "mm", 0.0, "Al", "W", "keV", "mm", True, True, 100, 1e-8, 1)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -251,13 +265,17 @@ def check_xray_config_dict(config_dict):
                 + str(opt_type)
                 + "."
             )
-        if not opt_type in (str, bool):  # All basic numbers should be > or >= 0
-            if (not args[-1] > 0) and opt_key != "filter_thickness":
+        if not opt_type in (str, bool):
+            if (
+                (not args[-1] > 0)
+                and opt_key != "filter_thickness"
+                and opt_key != "sample_rotation_direction"
+            ):
                 raise ValueError(
                     "The given value "
                     + str(args[-1])
                     + " of '"
-                    + req_key
+                    + opt_key
                     + "' is invalid. It should be > 0."
                 )
             elif (not args[-1] >= 0.0) and opt_key == "filter_thickness":
@@ -265,8 +283,19 @@ def check_xray_config_dict(config_dict):
                     "The given value "
                     + str(args[-1])
                     + " of '"
-                    + req_key
+                    + opt_key
                     + "' is invalid. It should be >= 0."
+                )
+            elif (
+                args[-1] not in [-1, 1]
+                and opt_key == "sample_rotation_direction"
+            ):
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + opt_key
+                    + "' is invalid. It should be -1 or 1."
                 )
 
         if opt_key in (
@@ -277,7 +306,7 @@ def check_xray_config_dict(config_dict):
                 "The given value '"
                 + args[-1]
                 + "' of '"
-                + req_key
+                + opt_key
                 + "' is invalid. It should be 'm', 'cm', or 'mm'."
             )
         if opt_key == "energy_unit" and args[-1] not in (
@@ -289,7 +318,7 @@ def check_xray_config_dict(config_dict):
                 "The given value '"
                 + args[-1]
                 + "' of '"
-                + req_key
+                + opt_key
                 + "' is invalid. It should be 'eV', 'keV', or 'MeV'."
             )
 
@@ -565,9 +594,7 @@ def set_up_sample(
     tilt_axis = rot.apply(tilt / tilt_angle)
     offset = rot.apply(rot_tilt.apply(offset))
 
-    phase_names = [
-        "phase_" + str(i) for i in range(len(phase_densities))
-    ]
+    phase_names = ["phase_" + str(i) for i in range(len(phase_densities))]
 
     # We load files for the first occurences here in order to load only once.
     for name, path, element, ratio, density in zip(
@@ -642,6 +669,7 @@ def add_photonic_noise(noise_free_projection, integrate_energy=True):
 def perform_tomographic_scan(
     num_projections,
     scanning_angle,
+    sample_rotation_direction,
     display=False,
     integrate_energy=True,
     photonic_noise=True,
@@ -653,6 +681,9 @@ def perform_tomographic_scan(
     Args:
         num_projections (int): The number of X-Ray projections.
         scanning_angle (float): The scanning angle in degrees.
+        sample_rotation_direction (int): The direction to rotate the sample.
+                                         +1 for clockwise, -1 for counter
+                                         clockwise.
 
     Keyword args:
         display (bool): Will display the scanning scene if true.
@@ -686,7 +717,7 @@ def perform_tomographic_scan(
             gvxr.displayScene()
 
         # Rotate the sample
-        gvxr.rotateScene(-angular_step, 0, 0, 1)
+        gvxr.rotateScene(-angular_step * sample_rotation_direction, 0, 0, 1)
 
     return raw_projections
 
@@ -907,6 +938,7 @@ def _generate_sinograms(xray_config_dict, queue):
     raw_projections = perform_tomographic_scan(
         xray_config_dict["number_of_projections"],
         xray_config_dict["scanning_angle"],
+        xray_config_dict["sample_rotation_direction"],
         display=xray_config_dict["display"],
         photonic_noise=xray_config_dict["photonic_noise"],
     )
