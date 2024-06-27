@@ -597,7 +597,7 @@ def generate_woven_composite_sample(config_dict):
     boolean_difference_post_processing(
         weave_config_dict["mesh_paths"][0],
         weave_config_dict["mesh_paths"][1],
-        cut_mesh=weave_config_dict["cut_mesh"]
+        weave_config_dict["cut_mesh"]
     )
 
     set_origin_to_barycenter(
