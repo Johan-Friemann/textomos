@@ -248,7 +248,7 @@ def generate_xray_config(
     sample_length_unit="mm",
     scanner_length_unit="mm",
     energy_unit="keV",
-    sample_rotation_direction=1,
+    sample_rotation_direction= 0.5,
     reconstruction_algorithm="FDK_CUDA",
     **kwargs  # Needed to call by dict (will contain more than these args)
 ):
@@ -326,8 +326,9 @@ def generate_xray_config(
         energy_unit (str): The unit for X-Ray photon energy. Should in principle
                            be "keV" for spekpy compatibility.
 
-        sample_rotation_direction (int): The sample rotation direction, should
-                                         in principle always be 1.
+        sample_rotation_direction (float): The probability to rotate the sample
+                                           clockwise (opposite otherwise).
+                                           Should be between 0 and 1.
 
         reconstruction_algorithm (str): The ASTRA tomographic reconstruction
                                         algorithm to use.
@@ -398,7 +399,10 @@ def generate_xray_config(
     x_ray_config_dict["sample_length_unit"] = sample_length_unit
     x_ray_config_dict["scanner_length_unit"] = scanner_length_unit
     x_ray_config_dict["energy_unit"] = energy_unit
-    x_ray_config_dict["sample_rotation_direction"] = sample_rotation_direction
+    if np.random.rand() < sample_rotation_direction:
+        x_ray_config_dict["sample_rotation_direction"] = 1
+    else:
+        x_ray_config_dict["sample_rotation_direction"] = -1
     x_ray_config_dict["reconstruction_algorithm"] = reconstruction_algorithm
 
     return x_ray_config_dict
