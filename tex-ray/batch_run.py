@@ -2,6 +2,7 @@ import os
 import signal
 import time
 import sys
+import copy
 from multiprocessing import Process
 import numpy as np
 import random
@@ -61,9 +62,10 @@ def generate_layer2layer_config(
     width_to_spacing_ratio=[0.85, 0.98],
     weft_to_warp_ratio=[0.2, 0.8],
     yarns_per_layer=[2, 10],
+    number_of_yarn_layers=[4, 8],
     unit_cell_side_length=[5.0, 22.0],
     unit_cell_thickness=[2.0, 6.0],
-    weave_complexity=[4, 12],
+    weave_complexity=[0.05, 0.45],
     tiling=[1, 3],
     shift_unit_cell=True,
     deform_offset=[0.025, 0.075],
@@ -93,6 +95,9 @@ def generate_layer2layer_config(
         yarns_per_layer (list[int]): Lower and upper bound for weft/warp number
                                      of yarns per layer.
 
+        number_of_yarn_layers (list[int]): Lower and upper bound for number of
+                                           yarn layers.
+
         unit_cell_side_length (list[float]): Lower and upper bound for the side
                                              length of unit cellin the yarn
                                              plane.
@@ -100,8 +105,10 @@ def generate_layer2layer_config(
         unit_cell_thickness (list[float]): Lower and upper bound for unit cell
                                            thickness.
 
-        weave_complexity (list[int]): Lower and upper bound for number of push
-                                      up/down operations inside a unit cell.
+        weave_complexity (list[float]): Lower and upper bound for number of push
+                                        up/down operations inside a unit cell.
+                                        It is given as a percentage of yarn
+                                        meeting points.
 
         tiling (list[int]): Lower and upper bound for number of unit cell
                             repetitions in any direction.
@@ -146,6 +153,9 @@ def generate_layer2layer_config(
     sample_config_dict["warp_yarns_per_layer"] = np.random.randint(
         yarns_per_layer[0], high=yarns_per_layer[1]
     )
+    sample_config_dict["number_of_yarn_layers"] = np.random.randint(
+        number_of_yarn_layers[0], high=number_of_yarn_layers[1]
+    )
     sample_config_dict["weft_to_warp_ratio"] = weft_to_warp_ratio[
         0
     ] + np.random.rand() * (weft_to_warp_ratio[1] - weft_to_warp_ratio[0])
@@ -171,7 +181,14 @@ def generate_layer2layer_config(
     sample_config_dict["weave_pattern"] = generate_weave_pattern(
         sample_config_dict["weft_yarns_per_layer"],
         sample_config_dict["warp_yarns_per_layer"],
-        np.random.randint(weave_complexity[0], high=weave_complexity[1]),
+        int(
+            (
+                weave_complexity[0]
+                + np.random.rand() * (weave_complexity[1] - weave_complexity[0])
+            )
+            * sample_config_dict["weft_yarns_per_layer"]
+            * sample_config_dict["warp_yarns_per_layer"]
+        ),
     )
     sample_config_dict["tiling"] = [
         np.random.randint(tiling[0], high=tiling[1]),
@@ -248,7 +265,7 @@ def generate_xray_config(
     sample_length_unit="mm",
     scanner_length_unit="mm",
     energy_unit="keV",
-    sample_rotation_direction= 0.5,
+    sample_rotation_direction=0.5,
     reconstruction_algorithm="FDK_CUDA",
     **kwargs  # Needed to call by dict (will contain more than these args)
 ):
@@ -302,11 +319,11 @@ def generate_xray_config(
         num_reference (list(int)): Lower and upper bounds of number of reference
                                    images to use for white field average.
 
-        filter_material (str): The chemical symbol of the filter material.  
+        filter_material (str): The chemical symbol of the filter material.
 
         target_material (str): The chemical symbol of the target material.
 
-        energy_bin_width (float): The width of the spectrum bins in keV.                      
+        energy_bin_width (float): The width of the spectrum bins in keV.
 
         binning (int): The detector binning value.
 
@@ -339,7 +356,7 @@ def generate_xray_config(
 
     """
     x_ray_config_dict = {}
-    x_ray_config_dict["tiling"] = [
+    x_ray_config_dict["offset"] = [
         offset[0][0] + np.random.rand() * (offset[0][1] - offset[0][0]),
         offset[1][0] + np.random.rand() * (offset[1][1] - offset[1][0]),
         offset[2][0] + np.random.rand() * (offset[2][1] - offset[2][0]),
@@ -546,8 +563,8 @@ def clean_up_batch_files(num_samples):
 
 def run_batch(
     data_base_path,
+    parameters,
     num_process=1,
-    params={},
     chunk_size=10,
 ):
     """Run a batch of tex-ray simulations based on a config dictionary, and
@@ -577,6 +594,8 @@ def run_batch(
     """
     print("\nStarting to process a batch of size " + str(num_process) + ".")
     t0 = time.time()
+
+    params = copy.deepcopy(parameters)
 
     config_dicts, exit_codes = generate_woven_composite_sample_batch(
         num_process, params=params
@@ -630,17 +649,16 @@ def run_batch(
 if __name__ == "__main__":
     database_path = "./tex-ray/database"
     num_process = 10
-    chunk_size = 5
-    params = {}
+    chunk_size = 10
+    parameters = {}
 
     while True:
         job = (
             Process(  # We wrap each batch in a process to prevent memory leak.
                 target=run_batch,
-                args=(database_path),
+                args=(database_path, parameters),
                 kwargs={
                     "num_process": num_process,
-                    "params": params,
                     "chunk_size": chunk_size,
                 },
             )
