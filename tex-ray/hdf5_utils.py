@@ -37,35 +37,24 @@ def save_mesh_to_hdf5(
     Returns:
         -
     """
-    weft_mesh = meshio.read(config_dict["weft_path"])
-    weft_vertex_coords = weft_mesh.points
-    weft_triangle_vertex_connectivity = weft_mesh.cells[0].data
-
-    warp_mesh = meshio.read(config_dict["warp_path"])
-    warp_vertex_coords = warp_mesh.points
-    warp_triangle_vertex_connectivity = warp_mesh.cells[0].data
-
-    matrix_mesh = meshio.read(config_dict["matrix_path"])
-    matrix_vertex_coords = matrix_mesh.points
-    matrix_triangle_vertex_connectivity = matrix_mesh.cells[0].data
+    vertex_coords = []
+    triangle_vertex_connectivity = []
+    for path in config_dict["mesh_paths"]:
+        mesh = meshio.read(path)
+        vertex_coords.append(mesh.points)
+        triangle_vertex_connectivity.append(mesh.cells[0].data)
 
     with h5py.File(chunk_path, "a") as f:
         group = f.create_group("mesh_" + str(local_idx))
-        group.create_dataset("weft_vertex_coords", data=weft_vertex_coords)
-        group.create_dataset(
-            "weft_triangle_vertex_connectivity",
-            data=weft_triangle_vertex_connectivity,
-        )
-        group.create_dataset("warp_vertex_coords", data=warp_vertex_coords)
-        group.create_dataset(
-            "warp_triangle_vertex_connectivity",
-            data=warp_triangle_vertex_connectivity,
-        )
-        group.create_dataset("matrix_vertex_coords", data=matrix_vertex_coords)
-        group.create_dataset(
-            "matrix_triangle_vertex_connectivity",
-            data=matrix_triangle_vertex_connectivity,
-        )
+        for phase in range(len(vertex_coords)):
+            group.create_dataset(
+                "vertex_coords_" + str(phase), data=vertex_coords[phase]
+            )
+            group.create_dataset(
+                "triangle_vertex_connectivity_" + str(phase),
+                data=triangle_vertex_connectivity[phase],
+            )
+
     return None
 
 
@@ -200,14 +189,15 @@ def save_data(
         local_idx = f.attrs.get("current_local_index", -1) + 1
         chunk_idx = f.attrs.get("current_chunk_index", 0)
         # chunk_size argument is used during creation only (else: comes from db)
-        if local_idx >= f.attrs.get("chunk_size", chunk_size):
+        if f.attrs.get("chunk_size") is None:
+            f.attrs["chunk_size"] = chunk_size
+        if local_idx >= f.attrs["chunk_size"]:
             local_idx = 0
             chunk_idx += 1
         # no big deal to overwrite if nothing changes
         f.attrs["current_global_index"] = global_idx
         f.attrs["current_local_index"] = local_idx
         f.attrs["current_chunk_index"] = chunk_idx
-        f.attrs["chunk_size"] = chunk_size
 
         group_name = "data_" + str(global_idx)
         group = f.create_group(group_name)
@@ -216,9 +206,16 @@ def save_data(
         sub_group = group.create_group("metadata")
 
         # We exclude path information from database as it is not relevant.
+        # We treat list of varying length differently due to hdf5 restriction.
         for key in config_dict.keys():
             if not "path" in key:
-                sub_group.attrs[key] = config_dict[key]
+                if key == "phase_elements" or key == "phase_ratios":
+                    for phase in range(len(config_dict[key])):
+                        sub_group.attrs[key + "_" + str(phase)] = config_dict[
+                            key
+                        ][phase]
+                else:
+                    sub_group.attrs[key] = config_dict[key]
 
     mesh_chunk_path = mesh_path + "mesh_data_" + str(chunk_idx) + ".hdf5"
     save_mesh_to_hdf5(mesh_chunk_path, local_idx, config_dict)
@@ -403,7 +400,6 @@ def get_reconstruction_from_database(database_path, global_idx):
     reconstruction_dataset = f["reconstruction_" + str(local_idx)]
     slice_axis = reconstruction_dataset.attrs.get("slice_axis")
 
-    
     if slice_axis == "x":
         reconstruction = np.transpose(reconstruction_dataset[:], (1, 2, 0))
     elif slice_axis == "y":
@@ -434,7 +430,7 @@ def get_segmentation_from_database(database_path, global_idx):
     f = get_segmentation_chunk_handle(database_path, chunk_idx)
     segmentation_dataset = f["segmentation_" + str(local_idx)]
     slice_axis = segmentation_dataset.attrs.get("slice_axis")
-    
+
     if slice_axis == "x":
         segmentation = np.transpose(segmentation_dataset[:], (1, 2, 0))
     elif slice_axis == "y":
@@ -457,21 +453,13 @@ def get_meshes_from_database(database_path, global_idx):
         -
 
     Returns:
-        matrix_triangle_vertex_connectivity (np array[int]):
-            The matrix connectivity matrix found at global_idx.
+        
+        vertex_coords (list(np array[float])): Vertex coords for each
+                                               phase.
 
-        matrix_vertex_coords (np array[float]): Matrix mesh vertex coords.
-
-        weft_triangle_vertex_connectivity (np array[int]):
-            The weft connectivity matrix found at global_idx.
-
-        weft_vertex_coords (np array[float]): Weft mesh vertex coords.
-
-        warp_triangle_vertex_connectivity (np array[int]):
-            The warp connectivity matrix found at global_idx.
-
-        warp_vertex_coords (np array[float]): Warp mesh vertex coords.
-
+        triangle_vertex_connectivity (list(np array[float])): Connectivity
+                                                              matrix for each
+                                                              phase.
     """
     # global_to_local raises exception if database doesn't exist.
     chunk_idx, local_idx = global_to_local_index(database_path, global_idx)
@@ -480,29 +468,17 @@ def get_meshes_from_database(database_path, global_idx):
         "mesh_data/mesh_data_" + str(chunk_idx) + ".hdf5",
     )
 
+    vertex_coords = []
+    triangle_vertex_connectivity = []
     with h5py.File(mesh_path, "r") as f:
         mesh = f["mesh_" + str(local_idx)]
-        matrix_triangle_vertex_connectivity = mesh[
-            "matrix_triangle_vertex_connectivity"
-        ][:]
-        matrix_vertex_coords = mesh["matrix_vertex_coords"][:]
-        weft_triangle_vertex_connectivity = mesh[
-            "weft_triangle_vertex_connectivity"
-        ][:]
-        weft_vertex_coords = mesh["weft_vertex_coords"][:]
-        warp_triangle_vertex_connectivity = mesh[
-            "warp_triangle_vertex_connectivity"
-        ][:]
-        warp_vertex_coords = mesh["warp_vertex_coords"][:]
-
-    return (
-        matrix_triangle_vertex_connectivity,
-        matrix_vertex_coords,
-        weft_triangle_vertex_connectivity,
-        weft_vertex_coords,
-        warp_triangle_vertex_connectivity,
-        warp_vertex_coords,
-    )
+        keys = list(mesh.keys())
+        for key in keys:
+            if "vertex_coords_" in key:
+                vertex_coords.append(mesh[key])
+            elif "triangle_vertex_connectivity_" in key:
+                triangle_vertex_connectivity.append(mesh[key])
+    return vertex_coords, triangle_vertex_connectivity
 
 
 def delete_data(database_path, global_idx, i_know_what_i_am_doing=False):
@@ -596,14 +572,10 @@ def delete_data(database_path, global_idx, i_know_what_i_am_doing=False):
         else:
             recon = get_reconstruction_from_database(database_path, idx)
             seg = get_segmentation_from_database(database_path, idx)
-            (
-                mcon,
-                mcoords,
-                wecon,
-                wecoords,
-                wacon,
-                wacoords,
-            ) = get_meshes_from_database(database_path, idx)
+
+            vertex_coords, triangle_vertex_conenctivity = (
+                get_meshes_from_database(database_path, idx)
+            )
 
             # When we swap chunks we need to delete to make room for next move.
             with h5py.File(reconstruction_path + end_in, "a") as f:
@@ -626,13 +598,11 @@ def delete_data(database_path, global_idx, i_know_what_i_am_doing=False):
 
             with h5py.File(mesh_path + end_out, "a") as f:
                 mesh = f.create_group("mesh_" + str(chunk_size - 1))
-                mesh["matrix_triangle_vertex_connectivity"] = mcon
-                mesh["matrix_vertex_coords"] = mcoords
-                mesh["weft_triangle_vertex_connectivity"] = wecon
-                mesh["weft_vertex_coords"] = wecoords
-                mesh["warp_triangle_vertex_connectivity"] = wacon
-                mesh["warp_vertex_coords"] = wacoords
-
+                for phase in len(vertex_coords):
+                    mesh["vertex_coords_" + str(phase)] = vertex_coords[phase]
+                    mesh["triangle_vertex_conenctivity_" + str(phase)] = (
+                        triangle_vertex_conenctivity[phase]
+                    )
     # If we remove last item in chunk, delete chunk
     if current_local_idx == 0:
         os.remove(reconstruction_path + end_in)
