@@ -477,7 +477,7 @@ def get_meshes_from_database(database_path, global_idx):
             if "vertex_coords_" in key:
                 vertex_coords.append(mesh[key])
             elif "triangle_vertex_connectivity_" in key:
-                triangle_vertex_connectivity.append(mesh(key))
+                triangle_vertex_connectivity.append(mesh[key])
     return vertex_coords, triangle_vertex_connectivity
 
 
