@@ -2,7 +2,6 @@ import os
 import signal
 import time
 import sys
-import copy
 from multiprocessing import Process
 import numpy as np
 import random
@@ -298,7 +297,7 @@ def generate_xray_config(
         number_of_projections (list(int)): Lower and upper bounds of number of
                                            X-Ray projections.
 
-        scanning_angle (list(float)): Lower and upper bounds of tomography scanning
+        scanning_angle (list(float)): Lower and upper bounds of tomography
                                       scanning angle in degrees.
 
         anode_angle (list(float)):  Lower and upper bounds of X-Ray tube anode
@@ -427,14 +426,14 @@ def generate_xray_config(
 
 def generate_config_dict(
     sim_id,
-    params={},
+    parameters={},
 ):
     """Generate a valid Tex-Ray config dictionary associated with a sim-id.
 
     Args:
         sim_id (int): The simulation id to use for the config dictionary.
 
-        params (dict): Dictionary containing simulation parameters.
+        parameters (dict): Dictionary containing simulation parameters.
                        Domain randomizable parameters are given as an lower and
                        upper bound.
 
@@ -456,7 +455,7 @@ def generate_config_dict(
         "segmentations/" + "segmentation_" + str(sim_id) + ".tiff",
     )
 
-    if params.get("weave_type", "layer2layer") == "layer2layer":
+    if parameters.get("weave_type", "layer2layer") == "layer2layer":
         phases = ["weft", "warp", "matrix"]
         mesh_paths = []
         for phase in phases:
@@ -466,21 +465,21 @@ def generate_config_dict(
                 )
             )
         config_dict["mesh_paths"] = mesh_paths
-        config_dict.update(generate_layer2layer_config(**params))
+        config_dict.update(generate_layer2layer_config(**parameters))
 
-    config_dict.update(generate_xray_config(**params))
+    config_dict.update(generate_xray_config(**parameters))
 
     return config_dict
 
 
-def generate_woven_composite_sample_batch(num_samples, params={}):
+def generate_woven_composite_sample_batch(num_samples, parameters={}):
     """Perform a batch run of generate_woven_composite_sample.
 
     Args:
         num_samples (int): The number of samples to generate.
 
     Keyword args:
-        params (dict): Dictionary containing simulation parameters.
+        parameters (dict): Dictionary containing simulation parameters.
                        Domain randomizable parameters are given as an lower and
                        upper bound.
 
@@ -497,7 +496,7 @@ def generate_woven_composite_sample_batch(num_samples, params={}):
     exit_codes = []
 
     for i in range(num_samples):
-        config = generate_config_dict(i, params=params)
+        config = generate_config_dict(i, parameters=parameters)
         configs.append(config)
         job = Process(target=generate_woven_composite_sample, args=(config,))
         job.start()
@@ -563,9 +562,9 @@ def clean_up_batch_files(num_samples):
 
 def run_batch(
     data_base_path,
-    parameters,
     num_process=1,
     chunk_size=10,
+    parameters={},
 ):
     """Run a batch of tex-ray simulations based on a config dictionary, and
     store the results in a hdf5 database.
@@ -582,7 +581,7 @@ def run_batch(
         num_process (int): The number of processes to run in the batch. Decides
                            the number of samples that is produced per batch.
 
-        params (dict): Dictionary containing simulation parameters.
+        parameters (dict): Dictionary containing simulation parameters.
                        Domain randomizable parameters are given as an lower and
                        upper bound.
 
@@ -595,10 +594,8 @@ def run_batch(
     print("\nStarting to process a batch of size " + str(num_process) + ".")
     t0 = time.time()
 
-    params = copy.deepcopy(parameters)
-
     config_dicts, exit_codes = generate_woven_composite_sample_batch(
-        num_process, params=params
+        num_process, parameters=parameters
     )
 
     num_success = 0
@@ -656,10 +653,11 @@ if __name__ == "__main__":
         job = (
             Process(  # We wrap each batch in a process to prevent memory leak.
                 target=run_batch,
-                args=(database_path, parameters),
+                args=(database_path,), # Comma inside parenthesis is important!
                 kwargs={
                     "num_process": num_process,
                     "chunk_size": chunk_size,
+                    "parameters": parameters,
                 },
             )
         )
