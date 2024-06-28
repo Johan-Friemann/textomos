@@ -216,9 +216,16 @@ def save_data(
         sub_group = group.create_group("metadata")
 
         # We exclude path information from database as it is not relevant.
+        # We treat list of varying length differently due to hdf5 restriction.
         for key in config_dict.keys():
             if not "path" in key:
-                sub_group.attrs[key] = config_dict[key]
+                if key == "phase_elements" or key == "phase_ratios":
+                    for phase in range(len(config_dict[key])):
+                        sub_group.attrs[key + "_" + str(phase)] = config_dict[
+                            key
+                        ][phase]
+                else:
+                    sub_group.attrs[key] = config_dict[key]
 
     mesh_chunk_path = mesh_path + "mesh_data_" + str(chunk_idx) + ".hdf5"
     save_mesh_to_hdf5(mesh_chunk_path, local_idx, config_dict)
@@ -403,7 +410,6 @@ def get_reconstruction_from_database(database_path, global_idx):
     reconstruction_dataset = f["reconstruction_" + str(local_idx)]
     slice_axis = reconstruction_dataset.attrs.get("slice_axis")
 
-    
     if slice_axis == "x":
         reconstruction = np.transpose(reconstruction_dataset[:], (1, 2, 0))
     elif slice_axis == "y":
@@ -434,7 +440,7 @@ def get_segmentation_from_database(database_path, global_idx):
     f = get_segmentation_chunk_handle(database_path, chunk_idx)
     segmentation_dataset = f["segmentation_" + str(local_idx)]
     slice_axis = segmentation_dataset.attrs.get("slice_axis")
-    
+
     if slice_axis == "x":
         segmentation = np.transpose(segmentation_dataset[:], (1, 2, 0))
     elif slice_axis == "y":
