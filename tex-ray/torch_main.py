@@ -333,10 +333,8 @@ def draw_image_with_masks(
         input (torch tensor): A tensor of size 1 batch x 1 channel x height
                               x width. It is a normalized X-ray slice.
 
-        prediction (torch tensor): A tensor of size 1 batch x 4 channels
-                                   x height x width. Each channel refers to the
-                                   probabilities of a pixel belonging to the
-                                   respective material classes.
+        prediction (torch tensor): A tensor of size 1 batch x 1 channel
+                                   x height x width.
 
     Keyword args:
         alpha (float): A number between 0.0 and 1.0 that determines the opacity
@@ -352,10 +350,11 @@ def draw_image_with_masks(
     Returns:
         -
     """
-    air_mask = (prediction.argmax(1) == 0)[0]
-    weft_mask = (prediction.argmax(1) == 1)[0]
-    warp_mask = (prediction.argmax(1) == 2)[0]
-    matrix_mask = (prediction.argmax(1) == 3)[0]
+    # Need to separate the prediction into boolean mask arrays
+    air_mask = (prediction == 0)[0]
+    weft_mask = (prediction == 1)[0]
+    warp_mask = (prediction == 2)[0]
+    matrix_mask = (prediction == 3)[0]
     masks = torch.stack([air_mask, matrix_mask, weft_mask, warp_mask])
 
     # draw_segmentation_masks requires RGB.
@@ -552,31 +551,142 @@ def train_model(
     return None
 
 
+def run_inference_on_slice(model, input):
+    """Use model to run inference on input and return the segmentation.
+
+
+    Args:
+        model (torch model): The model to utilize.
+
+        input (torch tensor):  A tensor of size 1 batch x num channels x height
+                               x width, that is to be used by model for
+                               prediction.
+
+    Keyword args:
+        -
+
+    Returns:
+        prediction (torch tensor): A tensor of size 1 batch x 1 channel x height
+                                   x width, that contains the predicted
+                                   segmentation.
+    """
+    input[input > 1.0] = 1.0  # Remove zingers that can mess up normalization.
+    # We normalize here instead of inside the dataloader such that we can show
+    # the original image together with the segmentation.
+    transformed_input = (input - torch.min(input)) / (
+        torch.max(input) - torch.min(input)
+    )
+    # Argmax transforms probabiliteis into a segmented slice.
+    prediction = model(transformed_input)["out"].argmax(1)
+
+    return prediction
+
+
+def segment_slice_from_dataloader(model, dataloader, slice_idx):
+    """Use model to segment the slice with index slice_idx from dataloader.
+
+
+    Args:
+        model (torch model): The model to utilize.
+
+        dataloader (torch dataloader):  The dataloader from which the slice is
+                                        to be segmented is loaded.
+
+        slice_idx (int): The index of the slice to segment.
+
+    Keyword args:
+        -
+
+    Returns:
+        input (torch tensor):  A tensor of size 1 batch x num channels x height
+                               x width, that contains the input that was used
+                               for the segmentation model.
+
+        prediction (torch tensor): A tensor of size 1 batch x 1 channel x height
+                                   x width, that contains the predicted
+                                   segmentation.
+    """
+    device = next(model.parameters()).device
+
+    iterator = iter(dataloader)
+    for _ in range(slice_idx):  # Skip all entries up until idx - 1
+        next(iterator)
+    input = next(iterator)
+    if type(input) is list:  # Handle TIFFDataset vs TexRayDataset.
+        input = input[0]
+    input = input.to(device)
+
+    prediction = run_inference_on_slice(model, input)
+
+    return input, prediction
+
+
+def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
+    """Use model to segment slice with index slice_idx from dataloader.
+
+    Args:
+        model (torch model): The model to utilize.
+
+        dataloader (torch dataloader):  The dataloader from which the volume
+                                        to be segmented is loaded.
+
+
+    Keyword args:
+        slice_axis (str): The axis along which the segmentation is sliced.
+
+    Returns:
+
+        segmented_volume (torch tensor): A tensor of size len(dataloader) ^ 3
+                                         that contains the segmented volume.
+
+    """
+    device = next(model.parameters()).device
+
+    dim = len(dataloader)
+    segmented_volume = torch.zeros((dim, dim, dim), dtype=torch.uint8)
+    segmented_volume = segmented_volume.to(device)
+    iterator = iter(dataloader)
+    for slice_idx, input in enumerate(iterator):
+        input = input.to(device)
+        prediction = run_inference_on_slice(model, input)
+        segmented_volume[slice_idx] = prediction
+
+    # We need to permute our axes back to match original tiff-file.
+    if slice_axis == "x":
+        segmented_volume = torch.transpose(segmented_volume, 1, 2)
+        segmented_volume = torch.transpose(segmented_volume, 0, 2)
+    elif slice_axis == "y":
+        segmented_volume = torch.transpose(segmented_volume, 0, 1)
+    elif slice_axis != "z":
+        raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+    return segmented_volume
+
+
 if __name__ == "__main__":
-    train = True
-    test_idx = 250
+    train = False
     batch_size = 8
     num_epochs = 100
     learn_rate = 0.001
     weight_decay = 0.001
     momentum = 0.9
     num_workers = 4
-    state_dict_path = "./tex-ray/state_dict.pt"
+    state_dict_path = "./tex-ray/improved_state_dict2.pt"
     normalize = True
+    generator_seed = 0
 
+    inference = True
+    segmentation_path = "./tex-ray/ml_segmentation.tiff"
 
-    generator = torch.Generator()
-    generator.manual_seed(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
     model = build_model()
     model = model.to(device)
 
-    
     if train:
         dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
+        generator = torch.Generator()
+        generator.manual_seed(generator_seed)
         dataloaders = build_dataloaders(
             dataset, batch_size, num_workers, generator
         )
@@ -603,30 +713,15 @@ if __name__ == "__main__":
             state_dict_path=state_dict_path,
         )
 
-    model.load_state_dict(torch.load(state_dict_path))
-    model.eval()
-
-    test_set = TIFFDataset(
-        "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
-    )
-    test_loader = DataLoader(
-        test_set, batch_size=1, shuffle=False, num_workers=1
-    )
-
-    iterator = iter(test_loader)
-    for i in range(test_idx):
-        next(iterator)
-    inputs = next(iterator)
-    if type(inputs) is list:  # Handle TIFFDataset vs TexRayDataset.
-        inputs = inputs[0]
-    inputs[inputs > 1.0] = 1.0  # Remove zingers that can mess up normalization.
-    inputs = inputs.to(device)
-
-    # We normalize here instead of inside the dataloader such that we can show
-    # the original image together with the segmentation.
-    transformed_input = (inputs - torch.min(inputs)) / (
-        torch.max(inputs) - torch.min(inputs)
-    )
-
-    prediction = model(transformed_input)["out"]
-    draw_image_with_masks(inputs, prediction, alpha=0.2)
+    if inference:
+        model.load_state_dict(torch.load(state_dict_path))
+        model.eval()
+        test_set = TIFFDataset(
+            "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
+        )
+        test_loader = DataLoader(
+            test_set, batch_size=1, shuffle=False, num_workers=1
+        )
+        volume = segment_volume_from_dataloader(model, test_loader)
+        volume = volume.cpu().numpy()
+        tifffile.imwrite(segmentation_path, volume)
