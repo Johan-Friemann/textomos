@@ -683,7 +683,7 @@ if __name__ == "__main__":
     model = model.to(device)
 
     if train:
-        dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
+        dataset = TexRayDataset("./tex-ray/database", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
         generator = torch.Generator()
         generator.manual_seed(generator_seed)
