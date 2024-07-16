@@ -1,9 +1,10 @@
 import random
+import tifffile
 import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2
 from torchvision.utils import draw_segmentation_masks
 from torchvision.models.segmentation import (
@@ -16,8 +17,155 @@ from torchvision.models.segmentation import (
     fcn_resnet101,
     FCN_ResNet101_Weights,
 )
-from torch_dataset import TexRayDataset, TIFFDataset
-from torch_train import train_model
+from hdf5_utils import (
+    get_reconstruction_chunk_handle,
+    get_segmentation_chunk_handle,
+    get_metadata,
+    get_database_shape,
+)
+
+
+class TexRayDataset(Dataset):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        database_path (str): The absolute path to the database folder.
+
+    Keyword params:
+        normalize (bool): Will first scale the data so it is in the range 0 to 1
+                          (min-max scaling).
+    """
+
+    def __init__(self, database_path, normalize=False):
+        self.database_path = database_path
+
+        self.normalize = normalize
+
+        # data_0 is guaranteed to exist
+        detector_rows = get_metadata(database_path, 0, "detector_rows")
+        binning = get_metadata(database_path, 0, "binning")
+        self.slices_per_sample = detector_rows // binning
+        self.num_samples, self.num_chunks, self.chunk_size = get_database_shape(
+            self.database_path
+        )
+
+        self.recon_data = []
+        self.seg_data = []
+        for i in range(self.num_chunks):
+            recon_file_handle = get_reconstruction_chunk_handle(
+                self.database_path, i
+            )
+            self.recon_data.append([])
+            seg_file_handle = get_segmentation_chunk_handle(
+                self.database_path, i
+            )
+            self.seg_data.append([])
+            for j in range(self.chunk_size):
+                recon_data_handle = recon_file_handle.get(
+                    "reconstruction_" + str(j)
+                )
+                if recon_data_handle is not None:
+                    self.recon_data[i].append(recon_data_handle)
+                seg_data_handle = seg_file_handle.get("segmentation_" + str(j))
+                if seg_data_handle is not None:
+                    self.seg_data[i].append(seg_data_handle)
+
+    def __len__(self):
+        return self.num_samples * self.slices_per_sample
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        global_idx = idx // self.slices_per_sample
+        chunk_idx = global_idx // self.chunk_size
+        local_idx = global_idx % self.chunk_size
+        slice_idx = idx % self.slices_per_sample
+
+        # Unsqueeze to create a channel axis for consistency.
+        recon_slice = torch.tensor(
+            self.recon_data[chunk_idx][local_idx][slice_idx]
+        ).unsqueeze(0)
+        if self.normalize:
+            recon_slice = (recon_slice - torch.min(recon_slice)) / (
+                torch.max(recon_slice) - torch.min(recon_slice)
+            )
+
+        seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
+        seg_mask = torch.zeros(
+            (4, self.slices_per_sample, self.slices_per_sample)
+        )
+        for i in range(4):
+            seg_mask[i] = seg_slice == i
+
+        return recon_slice, seg_mask
+
+    def get_loss_weights(self):
+        """Get dataset median frequency balancing weights.
+
+        Args:
+            -
+
+        Keyword args:
+            -
+
+        Returns:
+            weights (torch tensor): A tensor of length 4 that contains the
+                                    frequency balancing weights. They are:
+                                    given as [air, matrix, weft, warp].
+        """
+        class_freq = torch.tensor([0, 0, 0, 0])
+        for idx in range(self.num_samples * self.slices_per_sample):
+            global_idx = idx // self.slices_per_sample
+            chunk_idx = global_idx // self.chunk_size
+            local_idx = global_idx % self.chunk_size
+            slice_idx = idx % self.slices_per_sample
+
+            seg_slice = torch.tensor(
+                self.seg_data[chunk_idx][local_idx][slice_idx]
+            )
+            for i in range(4):
+                class_freq[i] += torch.sum(seg_slice == i)
+
+        median = torch.median(class_freq)
+        return median / class_freq
+
+
+class TIFFDataset(Dataset):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        tiff_path (str): The absolute path to the tiff-file.
+
+    Keyword params:
+        slice_axis (str): The axis along which to take slices.
+    """
+
+    def __init__(self, tiff_path, slice_axis="x"):
+        self.tiff_path = tiff_path
+
+        self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
+        if slice_axis == "x":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 2)
+            self.reconstruction = torch.transpose(self.reconstruction, 1, 2)
+        elif slice_axis == "y":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 1)
+        elif slice_axis != "z":
+            raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+    def __len__(self):
+        return self.reconstruction.shape[0]
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        # Unsqueeze to create a channel axis for consistency.
+        recon_slice = self.reconstruction[idx].unsqueeze(0)
+
+        return recon_slice
 
 
 def build_model(
@@ -232,13 +380,181 @@ def draw_image_with_masks(
     return None
 
 
+def one_epoch(model, criterion, optimizer, dataloader, device, mode):
+    """Process one (1) epoch. This can be either training or validation.
+
+
+    Args:
+        model (torch model): The model to train/validate.
+
+        criterion (torch loss function): The loss function to use for training/
+                                         validation.
+
+        optimizer (torch optimizer): Optimizer to use for training.
+
+        dataloader (torch dataloader): Dataloader for loading data for training/
+                                       validation.
+
+        device (torch device): The device (cpu/gpu) that will be used to load/
+                               train the model.
+
+        mode (str): If set to "training" the model will be trained, else the
+                    model is validated.
+
+    Keyword args:
+        -
+
+    Returns:
+        epoch_loss (float): The epoch loss. This is the sum of all batch losses
+                            divided by the number of batches in the epoch.
+    """
+    if mode == "training":
+        header = "Training"
+        model.train()
+    else:
+        header = "Evaluation"
+        model.eval()
+
+    num_batches = len(dataloader)
+    epoch_loss = 0.0
+    current_batch = 0
+
+    for inputs, labels in dataloader:
+        inputs = inputs.to(device)
+        labels = labels.to(device)
+        current_batch += 1
+
+        optimizer.zero_grad()
+        with torch.set_grad_enabled(mode == "training"):
+            outputs = model(inputs)["out"]
+            loss = criterion(outputs, labels)
+            if mode == "training":
+                loss.backward()
+                optimizer.step()
+
+        batch_loss = loss.item()
+        epoch_loss += batch_loss
+        loss_str = "{:.6f}".format(batch_loss)
+        progress_str = "{:7.2%}".format(current_batch / num_batches)
+
+        num_space = 28 - len(header) - len(loss_str) - len(progress_str)
+        print(
+            "||" + " " * (num_space // 2 - 1) + header + " progress: ",
+            progress_str + " | Current batch loss: " + loss_str,
+            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+            end="\r",
+        )
+
+    print(" " * 67, end="\r")  # Clear such that following text prints cleanly.
+    return epoch_loss / num_batches
+
+
+def train_model(
+    model,
+    criterion,
+    optimizer,
+    dataloaders,
+    device,
+    num_epochs,
+    scheduler=None,
+    state_dict_path=None,
+):
+    """Train a torch model for one or more epochs.
+
+
+    Args:
+        model (torch model): The model to train.
+
+        criterion (torch loss function): The loss function to use for training.
+
+        optimizer (torch optimizer): Optimizer to use for training.
+
+        dataloaders (dict(torch dataloader)): A dictionary containing two items.
+                                              The first key "training" refers to
+                                              the dataloader to use for training
+                                              while the second key "validation"
+                                              refers to the dataloader to use
+                                              for validation.
+
+        device (torch device): The device (cpu/gpu) that will be used to load/
+                               train the model.
+
+        num_epochs (int): The number of epochs to train the model.
+
+    Keyword args:
+        state_dict_path (str): The absolute path to where to save the state
+                               dictionary. The function continuously saves the
+                               set of weights that results in the current lowest
+                               validation loss
+
+        scheduler (torch learning rate scheduler): The learning rate scheduler.
+                                                   to utilze during training.
+                                                   Is called once per epoch.
+    Returns:
+        -
+    """
+    num_space = 32 - len(model.__class__.__name__) - len(str(num_epochs))
+
+    print(
+        "-" * 66 + "\n||" + " " * (num_space // 2 - 1),
+        f"Training model: '{model.__class__.__name__}' for {num_epochs} epochs",
+        " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+        "\n" + "-" * 66,
+    )
+
+    best_loss = (
+        10e6  # Just put a big value to ensure non-convergence at step 1.
+    )
+    for epoch in range(num_epochs):
+        num_space = 55 - len(str(epoch + 1)) - len(str(num_epochs))
+        print(
+            "||" + " " * (num_space // 2 - 1),
+            f"Epoch {epoch + 1}/{num_epochs}",
+            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+        )
+
+        for mode in ["training", "validation"]:
+            epoch_loss = one_epoch(
+                model, criterion, optimizer, dataloaders[mode], device, mode
+            )
+            loss_str = "{:.6f}".format(epoch_loss)
+            if mode == "training":
+                num_space = 41 - len(loss_str)
+                print(
+                    "||" + " " * (num_space // 2 - 1),
+                    "Training epoch loss: " + loss_str,
+                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+                )
+            if mode == "validation":
+                if epoch_loss < best_loss:
+                    best_loss = epoch_loss
+                    loss_str += " *"
+                    if state_dict_path is not None:
+                        torch.save(model.state_dict(), state_dict_path)
+                num_space = 39 - len(loss_str)
+                print(
+                    "||" + " " * (num_space // 2 - 1),
+                    "Validation epoch loss: " + loss_str,
+                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+                )
+
+        if scheduler is not None:
+            scheduler.step()
+            current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
+            num_space = 35 - len(current_lr_str)
+            print(
+                "||" + " " * (num_space // 2 - 1),
+                "Updating learning rate to: " + current_lr_str,
+                " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+            )
+        print("-" * 66)
+
+    return None
+
+
 if __name__ == "__main__":
-    generator = torch.Generator()
-    generator.manual_seed(0)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    train = True
     test_idx = 250
-
     batch_size = 8
     num_epochs = 100
     learn_rate = 0.001
@@ -248,10 +564,16 @@ if __name__ == "__main__":
     state_dict_path = "./tex-ray/state_dict.pt"
     normalize = True
 
+
+    generator = torch.Generator()
+    generator.manual_seed(0)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
     model = build_model()
     model = model.to(device)
 
-    train = True
+    
     if train:
         dataset = TexRayDataset("./tex-ray/dbase", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
