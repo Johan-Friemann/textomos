@@ -664,14 +664,14 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
 
 
 if __name__ == "__main__":
-    train = False
+    train = True
     batch_size = 8
     num_epochs = 100
     learn_rate = 0.001
     weight_decay = 0.001
     momentum = 0.9
     num_workers = 4
-    state_dict_path = "./tex-ray/improved_state_dict2.pt"
+    state_dict_path = "./tex-ray/state_dict.pt"
     normalize = True
     generator_seed = 0
 
