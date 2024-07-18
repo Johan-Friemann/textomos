@@ -12,6 +12,7 @@ from olefile import isOleFile, OleFileIO
 import tifffile
 
 from x_ray_simulation import neg_log_transform
+from tomographic_reconstruction import perform_tomographic_reconstruction
 
 
 def read_txm_scan_data(in_path):
@@ -65,20 +66,17 @@ def read_txm_scan_data(in_path):
     return data_out
 
 
-def read_txrm_scan_data(
-    in_path, as_sino=False, neg_log=True, step=1, binning=1, threshold=1e-6
-):
+def read_txrm_scan_data(in_path, step=1, binning=1):
     """Read Zeiss txrm file data and perform flat field correction.
 
     Args:
         in_path (str): The absolute path to the txm file.
 
     Keyword args:
-        as_sino (bool): Will return sinograms instead of projections if true.
-        neg_log (bool): Will perform the negative log transform if true.
         step (int): Will include every step:th projection.
+
         binning (int): Binning number, sum bin by bin pixels across projections.
-        threshold (double): The thresholding value for negative log transform.
+
     Returns:
         data_out (numpy array[numpy array[numpy array[int]]]):
             Projections (or sinograms) as a numpy array.
@@ -118,8 +116,7 @@ def read_txrm_scan_data(
     stream.close()
     reference = np.frombuffer(buffer, np.uint16)
     reference_image = np.reshape(reference, (image_height, image_width))
-
-    num_images = images_taken // step + 1
+    num_images = images_taken // step
     data_out = np.ndarray(
         (num_images, image_height // binning, image_width // binning),
         dtype=np.float32,
@@ -135,7 +132,7 @@ def read_txrm_scan_data(
         stream.close()
         image_data = np.frombuffer(buffer, np.uint16)
         image = np.reshape(image_data, (image_height, image_width))
-        
+
         # Can't bin ref outside loop because the x or y-shift might not be even.
         # This is also why we have to bin after rolling the image.
         image = np.roll(
@@ -159,27 +156,24 @@ def read_txrm_scan_data(
             axis=(0, 1),
         )
         rolled_reference = (
-        rolled_reference.reshape(
-            image_height // binning, binning, image_width // binning, binning
-        )
-        .sum(-1)
-        .sum(1)
+            rolled_reference.reshape(
+                image_height // binning,
+                binning,
+                image_width // binning,
+                binning,
+            )
+            .sum(-1)
+            .sum(1)
         )
         data_out[(image_id - 1) // step] = image / rolled_reference
-
-    if neg_log:
-        data_out = neg_log_transform(data_out, threshold)
-
-    if as_sino:
-        data_out = np.swapaxes(data_out, 0, 1)
 
     return data_out
 
 
-def read_txm_scan_info(in_path):
-    """Read Zeiss txm file metadata.
+def read_txrm_scan_info(in_path):
+    """Read Zeiss txrm file metadata.
     Args:
-        in_path (str): The absolute path to the txm file.
+        in_path (str): The absolute path to the txrm file.
 
     Keyword args:
         -
@@ -200,37 +194,40 @@ def read_txm_scan_info(in_path):
         "ExpTimes",
         "OpticalMagnification",
         "ConeAngle",
+        "Angles",
     ]
     keys = [
         "voltage_kV",
         "current_microA",
-        "d_source_object_microm",
-        "d_object_detector_microm",
+        "d_source_object_mm",
+        "d_object_detector_mm",
         "image_pixel_size_microm",
         "detector_pixel_size_microm",
         "exposure_time_sec",
         "optical_magnification",
         "cone_angle",
+        "scanning_angle",
     ]
     for path, key in zip(paths, keys):
         ole = OleFileIO(in_path)
         full_path = "ImageInfo/" + path
         stream = ole.openstream(full_path)
         buffer = stream.read()
-        value = np.frombuffer(buffer, np.float32)[0]
+        if key != "scanning_angle":
+            value = np.frombuffer(buffer, np.float32)[0]
+        else:
+            angles = np.frombuffer(buffer, np.float32)
+            value = angles[-1] - angles[0]
         output_dict[key] = value
         stream.close()
 
     # uint32 data
-    paths = [
-        "CamFullHeight",
-        "CamFullWidth",
-        "CameraBinning",
-    ]
+    paths = ["CamFullHeight", "CamFullWidth", "CameraBinning", "ImagesTaken"]
     keys = [
         "detector_num_pixel_height",
         "detector_num_pixel_width",
         "detector_binning_num",
+        "images_taken",
     ]
     for path, key in zip(paths, keys):
         ole = OleFileIO(in_path)
@@ -276,3 +273,72 @@ def convert_txm_to_tiff(in_path, out_path, prune=[]):
     else:
         data_out = data_in
     tifffile.imwrite(out_path, data_out)
+
+
+def reconstruct_from_txrm(
+    in_path, out_path, step=1, binning=1, threshold=1e-16
+):
+    """Perform a tomographic reconstruction on projection data saved in a Zeiss
+        txrm file.
+
+    Args:
+        in_path (str): The absolute path to the txrm file.
+
+    Keyword args:
+        step (int): Will include every step:th projection.
+
+        binning (int): Binning number, sum bin by bin pixels across projections.
+
+        threshold (double): The thresholding value for negative log transform.
+
+    Returns:
+        data_out (numpy array[numpy array[numpy array[int]]]): The tomographic
+                                                               reconstruction.
+    """
+    # .item() is needed everywhere to ensure we get native python types
+    meta_data = read_txrm_scan_info(in_path)
+
+    # Binning done by the machine is treated as actual detector pixels
+    detector_rows = (
+        meta_data["detector_num_pixel_height"].item()
+        // meta_data["detector_binning_num"].item()
+    )
+    detector_columns = (
+        meta_data["detector_num_pixel_width"].item()
+        // meta_data["detector_binning_num"].item()
+    )
+    detector_pixel_size = (
+        meta_data["detector_pixel_size_microm"].item()
+        * meta_data["detector_binning_num"].item()
+        / 1000.0  # convert to mm
+        / meta_data[
+            "optical_magnification"
+        ].item()  # account for optical magnification (not handled by ASTRA)
+    )
+
+    number_of_projections = meta_data["images_taken"].item() // step
+
+    config_dict = {
+        "scanner_length_unit": "mm",
+        "detector_pixel_size": detector_pixel_size,
+        "distance_source_origin": abs(meta_data["d_source_object_mm"].item()),
+        "distance_origin_detector": meta_data["d_object_detector_mm"].item(),
+        "detector_rows": detector_rows,
+        "detector_columns": detector_columns,
+        "binning": binning,
+        "scanning_angle": meta_data["scanning_angle"].item(),
+        "number_of_projections": number_of_projections,
+        "sample_rotation_direction": -1,
+        "reconstruction_algorithm": "FDK_CUDA",
+    }
+
+    projections = read_txrm_scan_data(in_path, step=step, binning=binning)
+    neg_log_projections = neg_log_transform(projections, threshold)
+    del projections
+    sinograms = np.swapaxes(neg_log_projections, 0, 1)
+    del neg_log_projections
+    reconstructed_volume = perform_tomographic_reconstruction(
+        sinograms, config_dict, align_coordinates=False
+    )
+    del sinograms
+    tifffile.imwrite(out_path, reconstructed_volume)
