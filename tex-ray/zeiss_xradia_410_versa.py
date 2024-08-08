@@ -135,14 +135,35 @@ def read_txrm_scan_data(in_path, step=1, binning=1):
     # center_shift acts like a "DC" bias on the x_shifts
     shifts = np.array((x_shifts + center_shift, y_shifts))
 
-    stream = ole.openstream("ReferenceData/Image")
-    buffer = stream.read()
-    stream.close()
-    reference = np.frombuffer(buffer, np.uint16)
-    reference_image = np.reshape(reference, (image_height, image_width))
+    try: # Reference data should be uint16...
+        stream = ole.openstream("ReferenceData/Image")
+        buffer = stream.read()
+        stream.close()
+        reference = np.frombuffer(buffer, np.uint16)
+        reference_image = np.reshape(reference, (image_height, image_width))
+    except: # ...but it is conv to float32 if ref was taken with diff. exposure.
+        stream = ole.openstream("ReferenceData/ExpTime")
+        buffer = stream.read()
+        stream.close()
+        ref_exp = np.frombuffer(buffer, np.float32)[0]
+
+        stream = ole.openstream("ImageInfo/ExpTimes")
+        buffer = stream.read()
+        stream.close()
+        exp = np.frombuffer(buffer, np.float32)[0]
+
+        stream = ole.openstream("ReferenceData/Image")
+        buffer = stream.read()
+        stream.close()
+
+        scale = exp / ref_exp 
+        reference = (np.frombuffer(buffer, np.float32) * scale).astype(
+            np.float32
+        )
+        reference_image = np.reshape(reference, (image_height, image_width))
 
     # Weird hack that makes num_images = len(np.arange(images_taken)[::step])
-    num_images = (images_taken - 1) // step + 1 
+    num_images = (images_taken - 1) // step + 1
     projections_out = np.ndarray(
         (num_images, image_height // binning, image_width // binning),
         dtype=np.float32,
