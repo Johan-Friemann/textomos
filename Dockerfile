@@ -18,7 +18,11 @@ RUN apt update && apt upgrade -y && \
                    libboost-all-dev \
                    libxcb-cursor0 \
                    imagemagick \
-                   xterm
+                   xterm \
+                   dvipng \
+                   texlive-latex-extra \
+                   texlive-fonts-recommended \
+                   cm-super
 
 # Build base functionality of TexGen.
 # First sed fixes lower/upper case bug, second sed hard-mutes TexGen logger...
