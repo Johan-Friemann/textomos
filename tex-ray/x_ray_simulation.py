@@ -1,6 +1,7 @@
 from multiprocessing import Process, Queue
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from scipy.ndimage import convolve1d
 import spekpy as sp
 from gvxrPython3 import gvxr
 
@@ -236,6 +237,7 @@ def check_xray_config_dict(config_dict):
         "num_reference",
         "threshold",
         "sample_rotation_direction",
+        "point_spread",
     )
     opt_types = (
         int,
@@ -250,8 +252,23 @@ def check_xray_config_dict(config_dict):
         int,
         float,
         int,
+        float,
     )
-    def_vals = (1, "mm", 0.0, "Al", "W", "keV", "mm", True, True, 100, 1e-8, 1)
+    def_vals = (
+        1,
+        "mm",
+        0.0,
+        "Al",
+        "W",
+        "keV",
+        "mm",
+        True,
+        True,
+        100,
+        1e-8,
+        1,
+        0.0,
+    )
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -266,10 +283,10 @@ def check_xray_config_dict(config_dict):
                 + "."
             )
         if not opt_type in (str, bool):
-            if (
-                (not args[-1] > 0)
-                and opt_key != "filter_thickness"
-                and opt_key != "sample_rotation_direction"
+            if (not args[-1] > 0) and not opt_key in (
+                "filter_thickness",
+                "point_spread",
+                "sample_rotation_direction",
             ):
                 raise ValueError(
                     "The given value "
@@ -278,7 +295,10 @@ def check_xray_config_dict(config_dict):
                     + opt_key
                     + "' is invalid. It should be > 0."
                 )
-            elif (not args[-1] >= 0.0) and opt_key == "filter_thickness":
+            elif (not args[-1] >= 0.0) and opt_key in (
+                "filter_thickness",
+                "point_spread",
+            ):
                 raise ValueError(
                     "The given value "
                     + str(args[-1])
@@ -504,7 +524,7 @@ def set_up_xray_source(
     if focal_spot_size <= 0:
         gvxr.usePointSource()
     else:
-        gvxr.setFocalSpot(
+        gvxr.setFocalSpotAsSquare(
             -distance_source_origin,
             0.0,
             0.0,
@@ -673,6 +693,7 @@ def perform_tomographic_scan(
     display=False,
     integrate_energy=True,
     photonic_noise=True,
+    point_spread=0.0,
 ):
     """Perform a tomographic scan consisting of a certain number of projections
        and sweeping a certain angle. The scan rotates the sample clockwise
@@ -690,6 +711,8 @@ def perform_tomographic_scan(
         integrate_energy (bool): If true the energy fluence is measured by the
                                  detector. Photon count is measured if false.
         photonic_noise (bool): If true photonic noise is added to projections.
+        point_spread (float): Will add a point spread with specified kernel
+                              size if > 0.0.
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
@@ -705,10 +728,19 @@ def perform_tomographic_scan(
         (num_projections, detector_rows, detector_columns)
     )
 
+    if point_spread:  # Prepare psf here to not compute at every iteration.
+        x = np.arange(-10, 10 + 1)  # Reasonably sized kernel.
+        psf = np.exp(-((x / point_spread) ** 2))
+        psf /= np.sum(psf)  # normalized Gaussian expected
+
     angular_step = scanning_angle / num_projections
     for angle_id in range(0, num_projections):
         # Compute an X-ray image and add it to the set of projections.
         raw_projection = np.array(gvxr.computeXRayImage(integrate_energy))
+        if point_spread:
+            # A gaussian kernel is separable.
+            raw_projection = convolve1d(raw_projection, psf, axis=0)
+            raw_projection = convolve1d(raw_projection, psf, axis=1)
         if photonic_noise:
             raw_projection = add_photonic_noise(raw_projection)
         raw_projections[angle_id] = raw_projection
@@ -941,6 +973,8 @@ def _generate_sinograms(xray_config_dict, queue):
         xray_config_dict["sample_rotation_direction"],
         display=xray_config_dict["display"],
         photonic_noise=xray_config_dict["photonic_noise"],
+        point_spread=xray_config_dict["point_spread"] 
+        / xray_config_dict["binning"], # Correct for binning here since no pass.
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()
