@@ -273,10 +273,12 @@ def build_dataloaders(
         random.seed(worker_seed)
 
     if len(split) == 2:
-        training, validation = torch.utils.data.random_split(dataset, split)
+        training, validation = torch.utils.data.random_split(
+            dataset, split, generator=generator
+        )
     elif len(split) == 3:
         training, validation, testing = torch.utils.data.random_split(
-            dataset, split
+            dataset, split, generator=generator
         )
     else:
         raise ValueError("Dataloader split can only be of length 2 or 3.")
@@ -288,7 +290,7 @@ def build_dataloaders(
         "training": DataLoader(
             training,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             worker_init_fn=seed_worker,
             generator=generator,
             num_workers=num_workers,
@@ -296,7 +298,7 @@ def build_dataloaders(
         "validation": DataLoader(
             validation,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             worker_init_fn=seed_worker,
             generator=generator,
             num_workers=num_workers,
@@ -307,7 +309,7 @@ def build_dataloaders(
         dataloaders["testing"] = DataLoader(
             testing,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             worker_init_fn=seed_worker,
             generator=generator,
             num_workers=num_workers,
@@ -576,7 +578,7 @@ def run_inference_on_slice(model, input):
     transformed_input = (input - torch.min(input)) / (
         torch.max(input) - torch.min(input)
     )
-    # Argmax transforms probabiliteis into a segmented slice.
+    # Argmax transforms probabilities into a segmented slice.
     prediction = model(transformed_input)["out"].argmax(1)
 
     return prediction
