@@ -152,9 +152,9 @@ def check_xray_config_dict(config_dict):
                                 + req_key
                                 + "' must > 0."
                             )
-                        if sum(l) != 1.0:
+                        if not np.isclose(sum(l), 1.0):
                             raise ValueError(
-                                "The entries of the lists in'"
+                                "The entries of the lists in '"
                                 + req_key
                                 + "' must sum to 1.0"
                             )
@@ -729,7 +729,7 @@ def perform_tomographic_scan(
     )
 
     if point_spread:  # Prepare psf here to not compute at every iteration.
-        x = np.arange(-10, 10 + 1)  # Reasonably sized kernel.
+        x = np.arange(-20, 20 + 1)  # Reasonably sized kernel.
         psf = np.exp(-((x / point_spread) ** 2))
         psf /= np.sum(psf)  # normalized Gaussian expected
 
