@@ -273,7 +273,7 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
-def build_dataloaders(
+def build_dataloaders_from_single_set(
     dataset,
     batch_size,
     num_workers,
@@ -281,13 +281,13 @@ def build_dataloaders(
     split=[0.8, 0.2],
     shuffle=True,
 ):
-    """Build the model dataloader dictionary.
+    """Build the model dataloader dictionary from a single dataset.
 
     Args:
         dataset (pytorch dataset): The data set to use for constructing the
                                    loaders.
 
-        batch_Size (int): The dataloader batch size.
+        batch_size (int): The dataloader batch size.
 
         num_workers (int): The number of cpu workers to use while loading.
 
@@ -299,47 +299,72 @@ def build_dataloaders(
                              1. If length 2: train/validation split, if length 3
                              train/validation/test split.
 
-        shuffle (bool): Will shuffle the datasets if True.
+        shuffle (bool): Will shuffle the datasets between epochs if True.
 
     Returns:
         dataloaders (dict[pytorch dataloader]): The dataloader dictionary.
     """
-    if len(split) == 2:
-        training, validation = torch.utils.data.random_split(
-            dataset, split, generator=generator
-        )
-    elif len(split) == 3:
-        training, validation, testing = torch.utils.data.random_split(
-            dataset, split, generator=generator
-        )
-    else:
-        raise ValueError("Dataloader split can only be of length 2 or 3.")
-
     if sum(split) != 1.0:
         raise ValueError("Dataloader split must sum to 1.")
 
-    dataloaders = {
-        "training": DataLoader(
-            training,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            worker_init_fn=seed_worker,
-            generator=generator,
-            num_workers=num_workers,
-        ),
-        "validation": DataLoader(
-            validation,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            worker_init_fn=seed_worker,
-            generator=generator,
-            num_workers=num_workers,
-        ),
-    }
+    if len(split) not in (2, 3):
+        raise ValueError("Dataloader split can only be of length 2 or 3.")
 
-    if len(split) == 3:
-        dataloaders["testing"] = DataLoader(
-            testing,
+    datasets = torch.utils.data.random_split(
+        dataset, split, generator=generator
+    )
+    labels = ("training", "validation", "testing")
+    dataloaders = {}
+
+    for idx in range(len(split)):
+        dataloaders[labels[idx]] = DataLoader(
+            datasets[idx],
+            batch_size=batch_size,
+            shuffle=shuffle,
+            worker_init_fn=seed_worker,
+            generator=generator,
+            num_workers=num_workers,
+        )
+
+    return dataloaders
+
+
+def build_dataloaders_from_multiple_sets(
+    datasets,
+    batch_size,
+    num_workers,
+    generator,
+    shuffle=True,
+):
+    """Build the model dataloader dictionary from multiple datasets.
+
+    Args:
+        datasets (list[pytorch dataset]): The data sets to use for constructing
+                                          the loaders.
+
+        batch_size (int): The dataloader batch size.
+
+        num_workers (int): The number of cpu workers to use while loading.
+
+        generator (torch generator): The random number generator to use for data
+                                     sampling.
+
+    Keyword args:
+        shuffle (bool): Will shuffle the datasets between epochs if True.
+
+    Returns:
+        dataloaders (dict[pytorch dataloader]): The dataloader dictionary.
+    """
+    if len(datasets) not in (2, 3):
+        raise ValueError(
+            "Dataloaders can only be constructed from 2 or 3 datasets."
+        )
+    labels = ("training", "validation", "testing")
+    dataloaders = {}
+
+    for idx in range(len(datasets)):
+        dataloaders[labels[idx]] = DataLoader(
+            datasets[idx],
             batch_size=batch_size,
             shuffle=shuffle,
             worker_init_fn=seed_worker,
@@ -720,7 +745,7 @@ if __name__ == "__main__":
     if train:
         dataset = TexRayDataset("./tex-ray/database", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
-        dataloaders = build_dataloaders(
+        dataloaders = build_dataloaders_from_single_set(
             dataset, batch_size, num_workers, generator
         )
 
