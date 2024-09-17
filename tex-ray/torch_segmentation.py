@@ -168,6 +168,26 @@ class TIFFDataset(Dataset):
         return recon_slice
 
 
+def seed_all(rng_seed):
+    """Seed all random number generators for reproducibility.
+
+    Args:
+        rng_seed (int): The seed to use for relevant random number generators.
+
+    Keyword args:
+        -
+
+    Returns:
+        generator (Pytorch generator): A pytorch random number generator based
+                                       with seed set to rng_seed.
+    """
+    generator = torch.manual_seed(rng_seed)
+    numpy.random.seed(rng_seed)
+    random.seed(rng_seed)
+
+    return generator
+
+
 def build_model(
     model="deeplabv3_resnet50", input_channels=1, pre_trained=False
 ):
@@ -235,6 +255,24 @@ def build_model(
     return segmentation_model
 
 
+def seed_worker(worker_id):
+    """Seed a pytorch worker for reproducibility. This needs to be defined
+       in global scope.
+
+    Args:
+        worker_id (int): Pytorch worker id.
+
+    Keyword args:
+        -
+
+    Returns:
+        -
+    """
+    worker_seed = torch.initial_seed() % 2**32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def build_dataloaders(
     dataset,
     batch_size,
@@ -266,12 +304,6 @@ def build_dataloaders(
     Returns:
         dataloaders (dict[pytorch dataloader]): The dataloader dictionary.
     """
-
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
-        numpy.random.seed(worker_seed)
-        random.seed(worker_seed)
-
     if len(split) == 2:
         training, validation = torch.utils.data.random_split(
             dataset, split, generator=generator
@@ -666,21 +698,21 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
 
 
 if __name__ == "__main__":
+    state_dict_path = "./tex-ray/state_dict.pt"
+    inferenece_input_path = "./tex-ray/reconstructions/reconstruction.tiff"
+    inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
+    inference = True
     train = True
+    normalize = True
     batch_size = 8
     num_epochs = 20
     learn_rate = 0.001
     weight_decay = 0.001
     momentum = 0.9
     num_workers = 4
-    state_dict_path = "./tex-ray/state_dict.pt"
-    normalize = True
-    generator_seed = 0
+    rng_seed = 0
 
-    inference = True
-    inferenece_input_path = "./tex-ray/reconstructions/reconstruction.tiff"
-    inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
-
+    generator = seed_all(rng_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = build_model()
     model = model.to(device)
@@ -688,8 +720,6 @@ if __name__ == "__main__":
     if train:
         dataset = TexRayDataset("./tex-ray/database", normalize=normalize)
         weight = dataset.get_loss_weights().to(device)
-        generator = torch.Generator()
-        generator.manual_seed(generator_seed)
         dataloaders = build_dataloaders(
             dataset, batch_size, num_workers, generator
         )
