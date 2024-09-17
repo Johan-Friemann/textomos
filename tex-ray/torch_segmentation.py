@@ -678,10 +678,7 @@ if __name__ == "__main__":
     generator_seed = 0
 
     inference = True
-    inferenece_input_path = (
-        "./tex-ray/reconstructions/"
-        "reconstruction.tiff"
-    )
+    inferenece_input_path = "./tex-ray/reconstructions/reconstruction.tiff"
     inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
