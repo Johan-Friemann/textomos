@@ -678,7 +678,11 @@ if __name__ == "__main__":
     generator_seed = 0
 
     inference = True
-    segmentation_path = "./tex-ray/ml_segmentation.tiff"
+    inferenece_input_path = (
+        "./tex-ray/reconstructions/"
+        "reconstruction.tiff"
+    )
+    inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = build_model()
@@ -718,12 +722,10 @@ if __name__ == "__main__":
     if inference:
         model.load_state_dict(torch.load(state_dict_path))
         model.eval()
-        test_set = TIFFDataset(
-            "./tex-ray/reconstructions/real_binned_recon.tiff", slice_axis="x"
-        )
+        test_set = TIFFDataset(inferenece_input_path)
         test_loader = DataLoader(
             test_set, batch_size=1, shuffle=False, num_workers=1
         )
         volume = segment_volume_from_dataloader(model, test_loader)
         volume = volume.cpu().numpy()
-        tifffile.imwrite(segmentation_path, volume)
+        tifffile.imwrite(inferenece_output_path, volume)
