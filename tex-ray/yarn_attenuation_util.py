@@ -54,16 +54,22 @@ def compute_fiber_atomic_mass_fractions(
     atomic_weights,
     fiber_compound,
 ):
-    """DOCSTRING
+    """Compute the fiber materials atomic mass fractions.
 
     Args:
-        -
+        atomic_weights (numpy array[float]): A table of atomic weights.
+
+        fiber_compound (numpy array[float]):
+            The weight atomic formula for the fiber material. Each entry
+            corresponds to an entry in atomic_weights.
+
 
     Keyword args:
         -
 
     Returns:
-        -
+        fiber_atomic_mass_fractions (numpy array[float]): The fiber atomic
+                                                          mass fractions.
     """
     fiber_atomic_mass_fractions = (
         fiber_compound
