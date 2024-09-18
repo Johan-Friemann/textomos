@@ -6,16 +6,29 @@ def compute_matrix_atomic_mass_fractions(
     matrix_compounds,
     matrix_compounds_mixing_ratios,
 ):
-    """DOCSTRING
+    """Compute the matrix materials atomic mass fractions. The matrix is
+       typically consisting of resin + hardener with different chemical
+       formulas.
 
     Args:
-        -
+        atomic_weights (numpy array[float]): A table of atomic weights.
+
+        matrix_compounds (numpy array[numpy array[float]]):
+            A table of the matrix compounds atomic formulae. Each row
+            corresponds to a compound in the mixture. The column should match
+            the entries of atomic_weights.
+
+        matrix_compounds_mixing_ratios (numpy array[float]):
+            The weight of each compound when mixed. The entries correspond to
+            the rows of matrix_compounds.
+
 
     Keyword args:
         -
 
     Returns:
-        -
+        matrix_atomic_mass_fractions (numpy array[float]): The matrix atomic
+                                                           mass fractions.
     """
 
     matrix_compounds_total_masses = np.sum(
@@ -128,7 +141,7 @@ def estimate_fiber_volume_fraction(
 
         yarn_voxel_area (int): The number of voxels (pixels) that make up the
                                yarn cross section.
-        
+
         fiber_diameter (float): The diameter of an individual fiber.
 
         num_fibers_per_yarn (int): The number of fibers per yarn.
@@ -146,16 +159,16 @@ def estimate_fiber_volume_fraction(
 
 
 if __name__ == "__main__":
-    atomic_weights = np.array([12.011, 1.008, 14.007, 15.999]) # atomic units
+    atomic_weights = np.array([12.011, 1.008, 14.007, 15.999])  # atomic units
     matrix_compounds = np.array(
-        [[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]] 
-    ) # number of [C, H, N, O]
-    fiber_compound = np.array([1, 0, 0, 0]) # number of [C, H, N, O]
-    matrix_compounds_mixing_ratios = np.array([100.0, 34.05, 34.05]) # g per
-    matrix_density = 1.14 # g/cm^3
-    fiber_density = 1.78 # g/cm^3
-    voxel_size = 46.958218 # µm
-    fiber_diameter = 5.2 # µm
+        [[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]]
+    )  # number of [C, H, N, O]
+    fiber_compound = np.array([1, 0, 0, 0])  # number of [C, H, N, O]
+    matrix_compounds_mixing_ratios = np.array([100.0, 34.05, 34.05])  # g per
+    matrix_density = 1.14  # g/cm^3
+    fiber_density = 1.78  # g/cm^3
+    voxel_size = 46.958218  # µm
+    fiber_diameter = 5.2  # µm
     num_fiber_weft = 12000.0
     num_fiber_warp = 24000.0
     weft_voxel_area = 186
