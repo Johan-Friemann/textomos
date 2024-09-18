@@ -132,25 +132,18 @@ def compute_fiber_volume_fraction(
 
 
 if __name__ == "__main__":
-    # [C, H, N, O], atomic units
-    atomic_weights = np.array([12.011, 1.008, 14.007, 15.999])
-    # number of [C, H, N, O], -
+    atomic_weights = np.array([12.011, 1.008, 14.007, 15.999]) # atomic units
     matrix_compounds = np.array(
-        [[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]]
-    )
-    fiber_compound = np.array([1, 0, 0, 0])
-    # Amounts of compounds in g
-    matrix_compounds_mixing_ratios = np.array([100.0, 34.05, 34.05])
-    # density in g/cm^3
-    matrix_density = 1.14
-    fiber_density = 1.78
-    # µm
-    voxel_size = 46.958218
-    fiber_diameter = 5.2
-    # num fibers per yarn
+        [[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]] 
+    ) # number of [C, H, N, O]
+    fiber_compound = np.array([1, 0, 0, 0]) # number of [C, H, N, O]
+    matrix_compounds_mixing_ratios = np.array([100.0, 34.05, 34.05]) # g per
+    matrix_density = 1.14 # g/cm^3
+    fiber_density = 1.78 # g/cm^3
+    voxel_size = 46.958218 # µm
+    fiber_diameter = 5.2 # µm
     num_fiber_weft = 12000.0
     num_fiber_warp = 24000.0
-    # number of voxels covered by yarn
     weft_voxel_area = 186
     warp_voxel_area = 320
 
@@ -158,7 +151,7 @@ if __name__ == "__main__":
         voxel_size, weft_voxel_area, fiber_diameter, num_fiber_weft
     )
     fiber_volume_fraction_warp = compute_fiber_volume_fraction(
-        voxel_size, warp_voxel_area, fiber_diameter, num_fiber_weft
+        voxel_size, warp_voxel_area, fiber_diameter, num_fiber_warp
     )
     matrix_atomic_mass_fractions = compute_matrix_atomic_mass_fractions(
         atomic_weights, matrix_compounds, matrix_compounds_mixing_ratios
@@ -176,10 +169,24 @@ if __name__ == "__main__":
     weft_density = compute_yarn_density(
         fiber_density, fiber_volume_fraction_weft, matrix_density
     )
+    warp_atomic_mass_fractions = compute_yarn_atomic_mass_fractions(
+        fiber_atomic_mass_fractions,
+        fiber_density,
+        fiber_volume_fraction_warp,
+        matrix_atomic_mass_fractions,
+        matrix_density,
+    )
     warp_density = compute_yarn_density(
-        fiber_density, fiber_volume_fraction_weft, matrix_density
+        fiber_density, fiber_volume_fraction_warp, matrix_density
     )
 
-    print(yarn_atomic_mass_fractions)
-
-    # [0.92979529 0.02244698 0.02246452 0.02529321]
+    print("Weft atomic mass fractions of [C, H, N, O]:")
+    print(weft_atomic_mass_fractions)
+    print("Weft density in g/cm^3:")
+    print(weft_density)
+    print("Warp atomic mass fractions of [C, H, N, O]:")
+    print(warp_atomic_mass_fractions)
+    print("Warp density in g/cm^3:")
+    print(warp_density)
+    print("Matrix atomic mass fractions [C, H, N, O]:")
+    print(matrix_atomic_mass_fractions)
