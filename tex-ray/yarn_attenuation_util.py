@@ -87,7 +87,7 @@ def compute_yarn_atomic_mass_fractions(
     matrix_atomic_mass_fractions,
     matrix_density,
 ):
-    """Compute the yarn atomic mass fractions through a modified rule of
+    """Compute the yarn atomic mass fractions through a mass weighing rule of
        mixtures. All densities should be given in the same unit.
 
     Args:
@@ -189,8 +189,8 @@ if __name__ == "__main__":
     fiber_diameter = 5.2  # µm
     num_fiber_weft = 12000.0
     num_fiber_warp = 24000.0
-    weft_voxel_area = 186
-    warp_voxel_area = 320
+    weft_voxel_area = 200
+    warp_voxel_area = 300
 
     fiber_volume_fraction_weft = estimate_fiber_volume_fraction(
         voxel_size, weft_voxel_area, fiber_diameter, num_fiber_weft
