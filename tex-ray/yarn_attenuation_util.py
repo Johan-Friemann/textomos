@@ -111,19 +111,28 @@ def compute_yarn_density(fiber_density, fiber_volume_fraction, matrix_density):
     return yarn_density
 
 
-def compute_fiber_volume_fraction(
+def estimate_fiber_volume_fraction(
     voxel_size, yarn_voxel_area, fiber_diameter, num_fibers_per_yarn
 ):
-    """DOCSTRING
+    """Estimate the fiber volume fraction inside a yarn from the number of
+       voxels that the yarn cross section covers in a CT-slice. All length units
+       of given arguments must be the same.
 
     Args:
-        -
+        voxel_size (float): The voxel side length.
+
+        yarn_voxel_area (int): The number of voxels (pixels) that make up the
+                               yarn cross section.
+        
+        fiber_diameter (float): The diameter of an individual fiber.
+
+        num_fibers_per_yarn (int): The number of fibers per yarn.
 
     Keyword args:
         -
 
     Returns:
-        -
+        fiber_volume_fraction (float): The estimated fiber volume fraction.
     """
     measured_yarn_area = voxel_size**2 * yarn_voxel_area
     total_fiber_area = num_fibers_per_yarn * (fiber_diameter / 2) ** 2 * np.pi
@@ -147,10 +156,10 @@ if __name__ == "__main__":
     weft_voxel_area = 186
     warp_voxel_area = 320
 
-    fiber_volume_fraction_weft = compute_fiber_volume_fraction(
+    fiber_volume_fraction_weft = estimate_fiber_volume_fraction(
         voxel_size, weft_voxel_area, fiber_diameter, num_fiber_weft
     )
-    fiber_volume_fraction_warp = compute_fiber_volume_fraction(
+    fiber_volume_fraction_warp = estimate_fiber_volume_fraction(
         voxel_size, warp_voxel_area, fiber_diameter, num_fiber_warp
     )
     matrix_atomic_mass_fractions = compute_matrix_atomic_mass_fractions(
