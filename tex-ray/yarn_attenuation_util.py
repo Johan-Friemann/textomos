@@ -93,16 +93,21 @@ def compute_yarn_atomic_mass_fractions(
 
 
 def compute_yarn_density(fiber_density, fiber_volume_fraction, matrix_density):
-    """DOCSTRING
+    """Compute the yarn density through the rule of mixtures. All given
+       densitites must be the same unit.
 
     Args:
-        -
+        fiber_density (float): The density of the fiber material.
+
+        fiber_volume_fraction (float): The yarn fiber volume fraction.
+
+        matrix_density (float): The density of the matrix material.
 
     Keyword args:
         -
 
     Returns:
-        -
+        yarn_density (float): The density of the entire yarn.
     """
     yarn_density = (
         fiber_volume_fraction * fiber_density
