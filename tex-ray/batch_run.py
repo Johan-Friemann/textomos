@@ -216,13 +216,14 @@ def generate_layer2layer_geometry_config(
 
 
 def generate_attenuation_properties_config(
+    elements = [6, 1, 7, 8],
     atomic_weights=[12.011, 1.008, 14.007, 15.999],
     fiber_density=[1.691, 1.869],
     fiber_diameter=[4.94, 5.46],
     num_fibers=[[11400, 12600], [22800, 25200]],
     fiber_compound=[1, 0, 0, 0],
     matrix_density=[1.083, 1.197],
-    matrix_compounds=[[[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]]],
+    matrix_compounds=[[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]],
     matrix_compounds_mixing_ratios=[
         [95.0, 105.0],
         [32.3475, 35.7525],
@@ -242,10 +243,15 @@ def generate_attenuation_properties_config(
         -
 
     Keyword args:
+        elements list([int]): The element numbers of the atoms in the material
+                              constitutents. The order of the list must
+                              correspond to the order given in atomic_weights
+                              and the compound lists.
+
         atomic_weights (list[float]): The weight in atomic units of the
-                                      atoms present in the material. The order
+                                      atoms present in the materials. The order
                                       of the list must correspond to the order
-                                      given the compound lists.
+                                      given in elements and the compound lists.
 
         fiber_density (list[float]): Lower and upper bound for the density of
                                      the yarns' fibers.
@@ -258,7 +264,8 @@ def generate_attenuation_properties_config(
                                       type.
 
         fiber_compound (list[int]): The number of atoms per type in the fiber
-                                    material, corresponding to the weights in
+                                    material, corresponding to the elements in
+                                    elements and the weights in and
                                     atomic_weights.
 
         matrix_density (list[float]): Lower and upper bound for the density of
@@ -266,8 +273,8 @@ def generate_attenuation_properties_config(
 
         matrix_compounds (list[list[int]]):
             The number of atoms per type for the matrix ingredients,
-            corresponding to the weights in atomic_weights. Each row corresponds
-            to one matrix ingredient.
+            corresponding to elements in elements and the weights in 
+            atomic_weights. Each row corresponds to one matrix ingredient.
 
         matrix_compounds_mixing_ratios (list[list[float]]):
             Lower and upper bounds for the mixing ratio by weight for the matrix
@@ -276,7 +283,7 @@ def generate_attenuation_properties_config(
         voxel_size (float): The side length of the voxels in the CT-scan used
                             to estimate the yarn areas.
 
-        oxel_areas (list[list[int]]): Lower and upper bound for the number
+        voxel_areas (list[list[int]]): Lower and upper bound for the number
                                       of voxels covered by a yarn cross
                                       section. There is one row per yarn type.
 
@@ -324,6 +331,7 @@ def generate_attenuation_properties_config(
     )
 
     phase_ratios = []
+    phase_elements = []
     for yarn_fiber_volume_fraction in yarn_fiber_volume_fractions:
         phase_ratios.append(
             compute_yarn_atomic_mass_fractions(
@@ -334,8 +342,11 @@ def generate_attenuation_properties_config(
                 sampled_matrix_density,
             ).tolist()
         )
+        phase_elements.append(elements)
     phase_ratios.append(matrix_atomic_mass_fractions.tolist())
+    phase_elements.append(elements)
     attenuation_properties_config_dict["phase_ratios"] = phase_ratios
+    attenuation_properties_config_dict["phase_elements"] = phase_elements
 
     phase_densities = []
     for yarn_fiber_volume_fraction in yarn_fiber_volume_fractions:
