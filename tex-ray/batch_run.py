@@ -239,20 +239,20 @@ def generate_layer2layer_config(
 
 
 def generate_xray_config(
-    offset=[[-5.0, 5.0], [-5.0, 5.0], [-12.0, 12.0]],
-    tilt=[[-4.0, 4.0], [-4.0, 4.0], [-4.0, 4.0]],
-    detector_pixel_size=[0.02875, 0.03875],
+    offset=[[-0.2625, 0.2625], [-0.2625, 0.2625], [-0.2625, 0.2625]],
+    tilt=[[-1.575, 1.575], [-1.575, 1.575], [-1.575, 1.575]],
+    detector_pixel_size=[0.0320625, 0.0354375],
     detector_rows=2048,
-    distance_source_origin=[40.0, 80.0],
-    distance_origin_detector=[60.0, 100.0],
-    number_of_projections=[301, 1301],
-    scanning_angle=[260, 460],
-    anode_angle=[1.0, 23.0],
-    tube_voltage=[10.0, 70.0],
-    tube_power=[4.0, 16.0],
-    filter_thickness=[1.0, 3.0],
-    exposure_time=[1.0, 9.0],
-    num_reference=[10, 30],
+    distance_source_origin=[76.0, 84.0],
+    distance_origin_detector=[142.5, 157.5],
+    number_of_projections=[1427, 1577],
+    scanning_angle=[342, 378],
+    anode_angle=[11.4, 12.6],
+    tube_voltage=[38.0, 42.0],
+    tube_power=[9.5, 10.5],
+    filter_thickness=[0.95, 1.05],
+    exposure_time=[4.75, 5.25],
+    num_reference=30,
     filter_material="Al",
     target_material="W",
     energy_bin_width=0.5,
@@ -315,8 +315,8 @@ def generate_xray_config(
         exposure_time (list(float)): Lower and upper bounds of X-Ray exposure
                                      time in seconds.
 
-        num_reference (list(int)): Lower and upper bounds of number of reference
-                                   images to use for white field average.
+        num_reference ((int)): Number of reference images to use for white field
+                               average.
 
         filter_material (str): The chemical symbol of the filter material.
 
@@ -401,9 +401,7 @@ def generate_xray_config(
     x_ray_config_dict["exposure_time"] = exposure_time[0] + np.random.rand() * (
         exposure_time[1] - exposure_time[0]
     )
-    x_ray_config_dict["num_reference"] = np.random.randint(
-        num_reference[0], high=num_reference[1]
-    )
+    x_ray_config_dict["num_reference"] = num_reference
     x_ray_config_dict["filter_material"] = filter_material
     x_ray_config_dict["target_material"] = target_material
     x_ray_config_dict["energy_bin_width"] = energy_bin_width
@@ -644,7 +642,7 @@ def run_batch(
 
 
 if __name__ == "__main__":
-    database_path = "./tex-ray/database"
+    database_path = "./tex-ray/dbase"
     num_process = 10
     chunk_size = 10
     parameters = {}
@@ -653,7 +651,7 @@ if __name__ == "__main__":
         job = (
             Process(  # We wrap each batch in a process to prevent memory leak.
                 target=run_batch,
-                args=(database_path,), # Comma inside parenthesis is important!
+                args=(database_path,),  # Comma inside parenthesis is important!
                 kwargs={
                     "num_process": num_process,
                     "chunk_size": chunk_size,
