@@ -216,7 +216,7 @@ def generate_layer2layer_geometry_config(
 
 
 def generate_attenuation_properties_config(
-    elements = [6, 1, 7, 8],
+    elements=[6, 1, 7, 8],
     atomic_weights=[12.011, 1.008, 14.007, 15.999],
     fiber_density=[1.691, 1.869],
     fiber_diameter=[4.94, 5.46],
@@ -273,7 +273,7 @@ def generate_attenuation_properties_config(
 
         matrix_compounds (list[list[int]]):
             The number of atoms per type for the matrix ingredients,
-            corresponding to elements in elements and the weights in 
+            corresponding to elements in elements and the weights in
             atomic_weights. Each row corresponds to one matrix ingredient.
 
         matrix_compounds_mixing_ratios (list[list[float]]):
@@ -377,6 +377,7 @@ def generate_xray_config(
     tube_power=[9.5, 10.5],
     filter_thickness=[0.95, 1.05],
     exposure_time=[4.75, 5.25],
+    point_spread=[0.749892, 0.828828],
     num_reference=30,
     filter_material="Al",
     target_material="W",
@@ -437,6 +438,9 @@ def generate_xray_config(
         filter_thickness (list(float)): Lower and upper bounds of X-Ray filter
                                         thickness.
 
+        point_spread (list(float)): Lower and upper bounds of system point
+                                    spread kernel width.
+
         exposure_time (list(float)): Lower and upper bounds of X-Ray exposure
                                      time in seconds.
 
@@ -448,6 +452,8 @@ def generate_xray_config(
         target_material (str): The chemical symbol of the target material.
 
         energy_bin_width (float): The width of the spectrum bins in keV.
+
+        photonic_noie (Bool): Will add enable photonic noise if true.
 
         binning (int): The detector binning value.
 
@@ -525,6 +531,9 @@ def generate_xray_config(
     ] + np.random.rand() * (filter_thickness[1] - filter_thickness[0])
     x_ray_config_dict["exposure_time"] = exposure_time[0] + np.random.rand() * (
         exposure_time[1] - exposure_time[0]
+    )
+    x_ray_config_dict["point_spread"] = point_spread[0] + np.random.rand() * (
+        point_spread[1] - point_spread[0]
     )
     x_ray_config_dict["num_reference"] = num_reference
     x_ray_config_dict["filter_material"] = filter_material
@@ -769,7 +778,7 @@ def run_batch(
 
 
 if __name__ == "__main__":
-    database_path = "./tex-ray/dbase"
+    database_path = "./tex-ray/database"
     num_process = 10
     chunk_size = 10
     parameters = {}
