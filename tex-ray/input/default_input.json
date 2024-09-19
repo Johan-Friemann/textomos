@@ -45,7 +45,7 @@
     ],
     "phase_densities": [1.5098, 1.6331, 1.14],
     "offset": [0.0, -0.25, 0.0],
-    "tilt": [-0.4, -0.5, -2.2],
+    "tilt": [-0.4, -0.5, -1.5],
     "rot_axis": "x",
     "sample_length_unit": "mm",
     
@@ -60,7 +60,7 @@
     "number_of_projections": 3001,
     "scanning_angle": 360.0,
     "photonic_noise": true,
-    "point_spread": 0.78936,
+    "point_spread": 0.79326,
     "binning": 4,
     "threshold": 0.000000001,
 
