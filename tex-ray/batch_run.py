@@ -6,6 +6,7 @@ from multiprocessing import Process
 import numpy as np
 import random
 import tifffile
+from yarn_attenuation_util import *
 from x_ray_simulation import generate_sinograms
 from tomographic_reconstruction import perform_tomographic_reconstruction
 from textile_generation import generate_woven_composite_sample
@@ -57,7 +58,7 @@ def generate_weave_pattern(
     return weave_pattern
 
 
-def generate_layer2layer_config(
+def generate_layer2layer_geometry_config(
     width_to_spacing_ratio=[0.85, 0.98],
     weft_to_warp_ratio=[0.2, 0.8],
     yarns_per_layer=[2, 10],
@@ -72,9 +73,6 @@ def generate_layer2layer_config(
     deform_rotate=[2.5, 7.5],
     textile_resolution=12,
     cut_mesh=0.5,
-    phase_elements=[[6], [6], [6, 1, 17, 8]],
-    phase_ratios=[[1.0], [1.0], [0.404, 0.481, 0.019, 0.096]],
-    phase_densities=[[1.78, 1.82], [1.78, 1.82], [1.06, 1.10]],
     **kwargs  # Needed to call by dict (will contain more than these args)
 ):
     """Generate options pertaining the geometry (weave, yarn size, etc.) and the
@@ -128,17 +126,6 @@ def generate_layer2layer_config(
 
         cut_mesh (float): The probability to cut warp out of weft (does the
                           opposite otherwise). Should be between 0 and 1.
-
-        phase_elements (list(list(int))): The element numbers of the
-                                             constituents of the different
-                                             sample material phases.
-
-        phase_ratios (list(list(float))): The relative amount of the
-                                             constituent elements of the
-                                             different material phases.
-
-        phase_densities (list(list(float))): The upper and lower bounds for the
-                                             densities of the different phases.
 
     Returns:
         sample_config_dict (dict): A dict of the generated geometry options.
@@ -225,17 +212,144 @@ def generate_layer2layer_config(
         sample_config_dict["cut_mesh"] = "weft"
     else:
         sample_config_dict["cut_mesh"] = "warp"
-    sample_config_dict["phase_elements"] = phase_elements
-    sample_config_dict["phase_ratios"] = phase_ratios
-    sample_config_dict["phase_densities"] = [
-        phase_densities[0][0]
-        + np.random.rand() * (phase_densities[0][1] - phase_densities[0][0]),
-        phase_densities[1][0]
-        + np.random.rand() * (phase_densities[1][1] - phase_densities[1][0]),
-        phase_densities[2][0]
-        + np.random.rand() * (phase_densities[2][1] - phase_densities[2][0]),
-    ]
     return sample_config_dict
+
+
+def generate_attenuation_properties_config(
+    atomic_weights=[12.011, 1.008, 14.007, 15.999],
+    fiber_density=[1.691, 1.869],
+    fiber_diameter=[4.94, 5.46],
+    num_fibers=[[11400, 12600], [22800, 25200]],
+    fiber_compound=[1, 0, 0, 0],
+    matrix_density=[1.083, 1.197],
+    matrix_compounds=[[[25, 30, 2, 4], [17, 22, 2, 0], [21, 30, 2, 0]]],
+    matrix_compounds_mixing_ratios=[
+        [95.0, 105.0],
+        [32.3475, 35.7525],
+        [32.3475, 35.7525],
+    ],
+    voxel_size=46.96,
+    voxel_areas=[[190, 210], [280, 320]],
+    **kwargs  # Needed to call by dict (will contain more than these args)
+):
+    """Generate options pertaining the attenuation properties of the generated
+       sample's different phases. Specifically, phase densities and constituent
+       atomic mass fractions. Volume fraction of fibers in the yarns are
+       estimated by computing fiber area coverage / yarn area. Where the yarn
+       area is estimated from a CT-scan in number of voxels (pixels).
+
+    Args:
+        -
+
+    Keyword args:
+        atomic_weights (list[float]): The weight in atomic units of the
+                                      atoms present in the material. The order
+                                      of the list must correspond to the order
+                                      given the compound lists.
+
+        fiber_density (list[float]): Lower and upper bound for the density of
+                                     the yarns' fibers.
+
+        fiber_diameter (list[float]): Lower and upper bound for the diameter of
+                                      the yarns' fibers.
+
+        num_fibers (list[list[int]]): Lower and upper bound for the number of
+                                      fibers per yarn. There is one row per yarn
+                                      type.
+
+        fiber_compound (list[int]): The number of atoms per type in the fiber
+                                    material, corresponding to the weights in
+                                    atomic_weights.
+
+        matrix_density (list[float]): Lower and upper bound for the density of
+                                      cured matrix material.
+
+        matrix_compounds (list[list[int]]):
+            The number of atoms per type for the matrix ingredients,
+            corresponding to the weights in atomic_weights. Each row corresponds
+            to one matrix ingredient.
+
+        matrix_compounds_mixing_ratios (list[list[float]]):
+            Lower and upper bounds for the mixing ratio by weight for the matrix
+            constituent chemicals. Each row corresponds to a chemical.
+
+        voxel_size (float): The side length of the voxels in the CT-scan used
+                            to estimate the yarn areas.
+
+        oxel_areas (list[list[int]]): Lower and upper bound for the number
+                                      of voxels covered by a yarn cross
+                                      section. There is one row per yarn type.
+
+    Returns:
+        attenuation_properties_config_dict (dict): A dict of the generated
+                                                   sample material X-Ray
+                                                   attenuation properties.
+    """
+    attenuation_properties_config_dict = {}
+
+    yarn_fiber_volume_fractions = []
+    for voxel_area, num_fiber in zip(voxel_areas, num_fibers):
+        yarn_fiber_volume_fractions.append(
+            estimate_fiber_volume_fraction(
+                voxel_size,
+                voxel_area[0]
+                + np.random.rand() * (voxel_area[1] - voxel_area[0]),
+                fiber_diameter[0]
+                + np.random.rand() * (fiber_diameter[1] - fiber_diameter[0]),
+                num_fiber[0] + np.random.rand() * (num_fiber[1] - num_fiber[0]),
+            )
+        )
+
+    mixing_ratios = []
+    for weight in matrix_compounds_mixing_ratios:
+        mixing_ratios.append(
+            weight[0] + np.random.rand() * (weight[1] - weight[0])
+        )
+
+    matrix_atomic_mass_fractions = compute_matrix_atomic_mass_fractions(
+        np.array(atomic_weights),
+        np.array(matrix_compounds),
+        np.array(mixing_ratios),
+    )
+
+    fiber_atomic_mass_fractions = compute_fiber_atomic_mass_fractions(
+        np.array(atomic_weights), np.array(fiber_compound)
+    )
+
+    sampled_fiber_density = fiber_density[0] + np.random.rand() * (
+        fiber_density[1] - fiber_density[0]
+    )
+    sampled_matrix_density = matrix_density[0] + np.random.rand() * (
+        matrix_density[1] - matrix_density[0]
+    )
+
+    phase_ratios = []
+    for yarn_fiber_volume_fraction in yarn_fiber_volume_fractions:
+        phase_ratios.append(
+            compute_yarn_atomic_mass_fractions(
+                fiber_atomic_mass_fractions,
+                sampled_fiber_density,
+                yarn_fiber_volume_fraction,
+                matrix_atomic_mass_fractions,
+                sampled_matrix_density,
+            ).tolist()
+        )
+    phase_ratios.append(matrix_atomic_mass_fractions.tolist())
+    attenuation_properties_config_dict["phase_ratios"] = phase_ratios
+
+    phase_densities = []
+    for yarn_fiber_volume_fraction in yarn_fiber_volume_fractions:
+        phase_densities.append(
+            compute_yarn_density(
+                sampled_fiber_density,
+                yarn_fiber_volume_fraction,
+                sampled_matrix_density,
+            )
+        )
+    phase_densities.append(sampled_matrix_density)
+    attenuation_properties_config_dict["phase_densities"] = phase_densities
+
+    return attenuation_properties_config_dict
 
 
 def generate_xray_config(
@@ -463,7 +577,9 @@ def generate_config_dict(
                 )
             )
         config_dict["mesh_paths"] = mesh_paths
-        config_dict.update(generate_layer2layer_config(**parameters))
+        config_dict.update(generate_layer2layer_geometry_config(**parameters))
+
+    config_dict.update(generate_attenuation_properties_config(**parameters))
 
     config_dict.update(generate_xray_config(**parameters))
 
