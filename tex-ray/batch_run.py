@@ -439,7 +439,7 @@ def generate_xray_config(
                                         thickness.
 
         point_spread (list(float)): Lower and upper bounds of system point
-                                    spread kernel width.
+                                    spread kernel standard deviation.
 
         exposure_time (list(float)): Lower and upper bounds of X-Ray exposure
                                      time in seconds.
