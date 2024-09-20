@@ -5,6 +5,12 @@ from scipy.ndimage import convolve1d
 
 plt.rcParams.update({"text.usetex": True, "font.family": "serif"})
 
+"""
+This file contains a small script for estimating the line spread function from
+an straight edge experiment (edge spread). The function also allows for
+estimating an equivalent kernel for the system with binning.
+"""
+
 
 def gaussian(x, mu, sigma):
     y = np.exp(-((x - mu) ** 2) / (sigma**2)) / (sigma * np.sqrt(np.pi))
@@ -26,7 +32,7 @@ def bin_line(x, binning_number):
 
 
 if __name__ == "__main__":
-    edge_test_path = "./tex-ray/edge500.csv"
+    edge_test_path = "./tex-ray/edge_spread.csv" # format: pixel, %intensity
     sign_conv = -1  # Depends on what side is bright
     guess_experiment = [53.5, 4.0]
     L = 100  # Reasonable domain size
