@@ -60,7 +60,7 @@
     "number_of_projections": 3001,
     "scanning_angle": 360.0,
     "photonic_noise": true,
-    "point_spread": 0.79326,
+    "point_spread": 0.7920,
     "binning": 4,
     "threshold": 0.000000001,
 
