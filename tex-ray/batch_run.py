@@ -377,7 +377,7 @@ def generate_xray_config(
     tube_power=[9.5, 10.5],
     filter_thickness=[0.95, 1.05],
     exposure_time=[4.75, 5.25],
-    point_spread=[0.749892, 0.828828],
+    point_spread=[0.7524, 0.8316],
     num_reference=30,
     filter_material="Al",
     target_material="W",
