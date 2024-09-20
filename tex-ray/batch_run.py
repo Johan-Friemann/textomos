@@ -11,7 +11,7 @@ from x_ray_simulation import generate_sinograms
 from tomographic_reconstruction import perform_tomographic_reconstruction
 from textile_generation import generate_woven_composite_sample
 from segmentation import segment_reconstruction
-from hdf5_utils import save_data
+from hdf5_utils import save_data, get_database_shape
 
 
 """
@@ -696,6 +696,7 @@ def clean_up_batch_files(num_samples):
 
 def run_batch(
     data_base_path,
+    max_size=10,
     num_process=1,
     chunk_size=10,
     parameters={},
@@ -712,6 +713,9 @@ def run_batch(
                               not exist it is created.
 
     Keyword args:
+        num_data (int): The number of data points to generate. Will terminate
+                        when num_data points have been generated.
+
         num_process (int): The number of processes to run in the batch. Decides
                            the number of samples that is produced per batch.
 
@@ -757,9 +761,11 @@ def run_batch(
                 save_data(
                     data_base_path, config_dicts[sim_id], chunk_size=chunk_size
                 )
+                if get_database_shape(database_path)[0] == max_size:
+                    sys.exit(0) # This exits the inner processes
 
     except KeyboardInterrupt:
-        print("\nKeyboard interrupt, terminating all processes!")
+        print("\nKeyboard interrupt; terminating all processes!")
         clean_up_batch_files(num_process)
         sys.exit(0)
 
@@ -780,7 +786,8 @@ def run_batch(
 if __name__ == "__main__":
     database_path = "./tex-ray/database"
     num_process = 10
-    chunk_size = 10
+    database_max_size = 2
+    chunk_size = 20
     parameters = {}
 
     while True:
@@ -790,6 +797,7 @@ if __name__ == "__main__":
                 args=(database_path,),  # Comma inside parenthesis is important!
                 kwargs={
                     "num_process": num_process,
+                    "max_size": database_max_size,
                     "chunk_size": chunk_size,
                     "parameters": parameters,
                 },
@@ -798,3 +806,10 @@ if __name__ == "__main__":
         job.start()
         job.join()
         job.close()
+        if get_database_shape(database_path)[0] == database_max_size:
+            print(
+                "\nReached number of requested data points;",
+                "terminating all processes!",
+            )
+            clean_up_batch_files(num_process)
+            sys.exit(0) # This exits the main process.
