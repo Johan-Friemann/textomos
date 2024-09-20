@@ -164,7 +164,7 @@ def save_data(
                           creating a new database.
 
     Returns:
-        -
+        global_idx (int): The global index of the data that was saved.
     """
 
     map_path = os.path.join(database_path, "database_map.hdf5")
@@ -231,7 +231,7 @@ def save_data(
     )
     save_segmentation_to_hdf5(segmentation_chunk_path, local_idx, config_dict)
 
-    return None
+    return global_idx
 
 
 def get_reconstruction_chunk_handle(database_path, chunk_index):
