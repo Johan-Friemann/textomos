@@ -786,7 +786,7 @@ def run_batch(
 if __name__ == "__main__":
     database_path = "./tex-ray/database"
     num_process = 10
-    database_max_size = 2
+    database_max_size = 100
     chunk_size = 20
     parameters = {}
 
