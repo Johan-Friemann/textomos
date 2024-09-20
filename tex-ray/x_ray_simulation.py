@@ -16,6 +16,9 @@ Important things to bear in mind:
       fluence mode. Additionally, gvxr.getUnitOfEnergy("MeV") returns 1.0.
     - The unit of length in gVirtualXRay is mm (milimeter). Therefore the
       function gvxr.getUnitOfLength("mm") returns 1.0.
+    - The point spread kernel standard deviation is not compensating for
+      binning. Therefore, the user must enter the PSF size for the binned
+      system.
 """
 
 
@@ -712,7 +715,7 @@ def perform_tomographic_scan(
                                  detector. Photon count is measured if false.
         photonic_noise (bool): If true photonic noise is added to projections.
         point_spread (float): Will add a point spread with specified kernel
-                              size if > 0.0.
+                              standard deviation if > 0.0.
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
@@ -720,7 +723,8 @@ def perform_tomographic_scan(
                                               shape (num_projections,
                                               detector_rows, detector_columns).
     """
-    # No need to correct for binning since it is taken care of during set-up.
+    # We can't correct for binning of the psf. This the binned psf must be given
+    # by the user explicitly.
     # We do not need to account for binning in the noise since a sum of
     # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
@@ -973,8 +977,7 @@ def _generate_sinograms(xray_config_dict, queue):
         xray_config_dict["sample_rotation_direction"],
         display=xray_config_dict["display"],
         photonic_noise=xray_config_dict["photonic_noise"],
-        point_spread=xray_config_dict["point_spread"] 
-        / xray_config_dict["binning"], # Correct for binning here since no pass.
+        point_spread=xray_config_dict["point_spread"]
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()
