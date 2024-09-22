@@ -1,4 +1,3 @@
-from multiprocessing import Process, Queue
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.ndimage import convolve1d
@@ -914,7 +913,7 @@ def neg_log_transform(corrected_projections, threshold):
 def generate_sinograms(config_dict):
     """Perform an X-Ray CT scan of a sample and return the sinograms.
 
-    This function should be wrapped for batch runs. This construction is needed
+    This function should be called once per program. This construction is needed
     for multiple sequential simulations due to the nature of the gvxr singleton.
     A new process must be spawned for each simulation to avoid loading into
     the previous simulation.
@@ -984,7 +983,7 @@ def generate_sinograms(config_dict):
         point_spread=xray_config_dict["point_spread"]
     )
     # After finishing the tomographic constructions it is safe to close window.
-    gvxr.destroyAllWindows()
+    gvxr.destroyWindow()
 
     flat_field_image = measure_flat_field(
         photonic_noise=xray_config_dict["photonic_noise"],
