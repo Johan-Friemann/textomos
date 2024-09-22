@@ -44,9 +44,9 @@ while : ; do
 
     for i in $(seq 0 $(($num_process-1))); do
         if [[ "${rets[$i]}" -eq 0 ]]; then
-            python3 /tex-ray/batch_util.py /tex-ray/input/input_$i.json $database_path $chunk_size $generate_until >/dev/null 2>&1
-            if [ -f /tex-ray/finished ]; then
-            break
+            python3 /tex-ray/batch_run.py /tex-ray/input/input_$i.json $database_path $chunk_size $generate_until >/dev/null 2>&1
+            if [ -f /tex-ray/input/finished ]; then
+                break
             fi
         fi   
     done
@@ -57,6 +57,8 @@ while : ; do
         rm -f /tex-ray/meshes/weft_$i.stl
         rm -f /tex-ray/meshes/warp_$i.stl
         rm -f /tex-ray/meshes/matrix_$i.stl
+        rm -f /tex-ray/reconstructions/reconstruction_$i.tiff
+        rm -f /tex-ray/segmentations/segmentation_$i.tiff
     done
 
     if [ ! -f /tex-ray/finished ]; then
