@@ -571,7 +571,7 @@ def generate_config(
         None
     """
     config_dict = {}
-    tex_ray_path = __file__.rstrip("batch_run.py")
+    tex_ray_path = __file__.rstrip("generate_config.py")
     # We load these paths here since they are identical for all weave types.
     config_dict["reconstruction_output_path"] = os.path.join(
         tex_ray_path,
