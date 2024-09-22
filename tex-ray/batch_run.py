@@ -25,12 +25,11 @@ The memory leak could be a bug in gvxr or an issue with tex-ray...
 if __name__ == "__main__":
     config_path = sys.argv[1]
     database_path = sys.argv[2]
-    chunk_size = sys.argv[3]
-    generate_until = sys.argv[4]
+    chunk_size = int(sys.argv[3])
+    generate_until = int(sys.argv[4])
 
     with open(config_path) as f:
         config_dict = json.load(f)
-    sinograms = generate_sinograms(config_dict)
 
     sinograms = generate_sinograms(config_dict)
     reconstruction = perform_tomographic_reconstruction(
