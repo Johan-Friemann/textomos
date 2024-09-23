@@ -41,14 +41,12 @@ function clean_up {
 }
 trap clean_up SIGTERM SIGINT SIGHUP
 
-printf "\n#####################################################################\n"
 printf "Generating data and saving it to database: $database_path\n"
 printf "Data is generated in batches of size $num_process\n"
-printf "Data is generated until database has size: $generate_until\n"
-printf "#####################################################################\n\n"
+printf "Data is generated until database has size: $generate_until\n\n"
 
 while : ; do
-    printf "### Starting to process a batch of size $(($num_process)). ###\n"
+    printf "Starting to process a batch of size $(($num_process)).\n"
     for i in $(seq 0 $(($num_process-1)));
     do
         python3 /tex-ray/generate_config.py $i /tex-ray/input/ >/dev/null 2>&1 &
@@ -103,9 +101,7 @@ while : ; do
     if [ ! -f /tex-ray/input/finished ]; then
         printf "    Finished processing $success samples.\n\n"
     else
-        printf "#####################################################################\n"
-        printf "### Reached target database size: $generate_until; Terminating! ###\n"
-        printf "#####################################################################\n"
+        printf "Reached target database size: $generate_until; Terminating!n"
         rm -f /tex-ray/input/finished
         break
     fi
