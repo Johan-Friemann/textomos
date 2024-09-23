@@ -63,7 +63,7 @@ function clean_up {
 }
 trap clean_up SIGTERM SIGINT SIGHUP
 
-printf "Generating data and saving it to database: $database_path\n"
+printf "\nGenerating data and saving it to database: $database_path\n"
 printf "Data is generated in batches of size $num_process\n"
 printf "Data is generated until database has size: $generate_until\n\n"
 
