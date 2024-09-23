@@ -2,7 +2,15 @@
 
 
 database_path=$1
+if [ -z $database_path ]; then
+    printf "No database path given; Terminating!\n"
+    exit
+fi
 generate_until=$2
+if [ -z $generate_until ]; then
+    printf "No database size requested; Terminating!\n"
+    exit
+fi
 
 while getopts 'b:p:s:' flag; do
     case "${flag}" in
@@ -57,6 +65,7 @@ function clean_up {
         rm -f /tex-ray/meshes/matrix_$i.stl
         rm -f /tex-ray/reconstructions/reconstruction_$i.tiff
         rm -f /tex-ray/segmentations/segmentation_$i.tiff
+        rm -f /tex-ray/input/finished
     done
     printf "\n"
     exit
@@ -84,12 +93,21 @@ while : ; do
         fi 
     done
     config_pids=() # Clear it so we don't try to kill dead processes.
+    if [ -f /tex-ray/input/finished ]; then
+        printf "Database already at or above target size: $generate_until; Terminating!.\n"
+        for i in $(seq 0 $(($num_process-1)));
+        do
+            rm -f /tex-ray/input/input_$i.json
+            rm -f /tex-ray/input/finished
+        done
+        break
+    fi
     printf "    Finished generating $(($num_process)) config files.\n"
 
     tex_pids=()
     for i in $(seq 0 $(($num_process-1)));
     do
-        python3 /tex-ray/textile_generation.py /tex-ray/input/input_$i.json >/dev/null 2>&1 & 
+        python3 /tex-ray/textile_generation.py /tex-ray/input/input_$i.json  & 
         tex_pids+=($!)
     done
     rets=()
