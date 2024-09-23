@@ -1,3 +1,5 @@
+import sys
+import json
 import pymeshlab as pml
 import numpy as np
 from numpy.random import rand
@@ -612,3 +614,9 @@ def generate_woven_composite_sample(config_dict):
         weave_config_dict["mesh_paths"][2],
     )
     return None
+
+if __name__ == "__main__":
+    config_path = sys.argv[1]
+    with open(config_path) as f:
+        config_dict = json.load(f)
+    generate_woven_composite_sample(config_dict)

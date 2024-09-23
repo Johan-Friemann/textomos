@@ -37,11 +37,15 @@
     "textile_resolution": 12,
 
 
-    "phase_elements": [[6], [6], [6, 1, 17, 8]],
-    "phase_ratios": [[1.0], [1.0], [0.404, 0.481, 0.019, 0.096]],
-    "phase_densities": [1.8, 1.8, 1.08],
-    "offset": [-0.4, 0.0, 11.7],
-    "tilt": [-1.0, 2.0, -3.5],
+    "phase_elements": [[6, 1, 7, 8], [6, 1, 7, 8], [6, 1, 7, 8]],
+    "phase_ratios": [
+        [0.9203, 0.0255, 0.0255,  0.0287],
+        [0.9600, 0.0128, 0.0128, 0.0144],
+        [0.7499, 0.0800, 0.0800, 0.0901]
+    ],
+    "phase_densities": [1.5098, 1.6331, 1.14],
+    "offset": [0.0, -0.25, 0.0],
+    "tilt": [-0.4, -0.5, -1.5],
     "rot_axis": "x",
     "sample_length_unit": "mm",
     
@@ -49,13 +53,14 @@
     "scanner_length_unit": "mm",
     "energy_unit": "keV",
     "detector_pixel_size": 0.03375,
-    "distance_source_origin": 60.0,
-    "distance_origin_detector": 80.0,
+    "distance_source_origin": 80.0,
+    "distance_origin_detector": 150.0,
     "detector_rows": 2048,
     "detector_columns": 2048,
-    "number_of_projections": 801,
+    "number_of_projections": 3001,
     "scanning_angle": 360.0,
     "photonic_noise": true,
+    "point_spread": 0.7920,
     "binning": 4,
     "threshold": 0.000000001,
 
@@ -64,7 +69,7 @@
     "anode_angle": 12.0,
     "tube_voltage": 40.0,
     "tube_power": 10.0,
-    "filter_thickness": 2.0,
+    "filter_thickness": 1.0,
     "filter_material": "Al",
     "target_material": "W",
     "exposure_time": 5.0,
