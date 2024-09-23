@@ -55,5 +55,5 @@ if __name__ == "__main__":
     num_datapoints = get_database_shape(database_path)[0]
 
     if num_datapoints == generate_until:
-        with open('/tex-ray/input/finished', 'wb') as f:
+        with open('/tex-ray/input/finished', 'w') as f:
             f.write("FINISHED")
