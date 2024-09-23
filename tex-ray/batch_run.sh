@@ -1,9 +1,17 @@
 #!/bin/bash
 
-num_process=10
-chunk_size=20
+
 database_path=$1
 generate_until=$2
+num_process=$3
+chunk_size=$4
+
+if [ -z $3 ]; then
+    num_process=10
+fi
+if [ -z $4 ]; then
+    chunk_size=20
+fi
 
 function clean_up {
     printf "\nReceived SIGTERM/SIGINT/SIGHUP; Terminating!\n"
@@ -96,7 +104,7 @@ while : ; do
         printf "    Finished processing $success samples.\n\n"
     else
         printf "#####################################################################\n"
-        printf "### Reached target database size: $generate_until. Terminating! ###\n"
+        printf "### Reached target database size: $generate_until; Terminating! ###\n"
         printf "#####################################################################\n"
         rm -f /tex-ray/input/finished
         break
