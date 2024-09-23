@@ -6,10 +6,18 @@ database_path=$1
 generate_until=$2
 
 function clean_up {
+    printf "\nReceived SIGTERM/SIGINT/SIGHUP; Terminating!\n"
     for pid in ${pids[*]}; do
-        kill -KILL $pid
+        if ps -p $pid >/dev/null; then 
+            kill $pid 
+        fi
     done
-    kill -KILL $mainpid
+
+    if [ ! -z $mainpid ]; then
+        if ps -p $mainpid >/dev/null; then
+            kill $mainpid
+        fi
+    fi
 
     for i in $(seq 0 $(($num_process-1)));
     do
@@ -20,25 +28,25 @@ function clean_up {
         rm -f /tex-ray/reconstructions/reconstruction_$i.tiff
         rm -f /tex-ray/segmentations/segmentation_$i.tiff
     done
-
+    printf "\n"
     exit
 }
-trap clean_up SIGHUP SIGINT SIGTERM
+trap clean_up SIGTERM SIGINT SIGHUP
 
-printf "#####################################################################\n"
+printf "\n#####################################################################\n"
 printf "Generating data and saving it to database: $database_path\n"
 printf "Data is generated in batches of size $num_process\n"
 printf "Data is generated until database has size: $generate_until\n"
 printf "#####################################################################\n\n"
 
 while : ; do
-    printf "Starting to process a batch of size $(($num_process)).\n"
+    printf "### Starting to process a batch of size $(($num_process)). ###\n"
     for i in $(seq 0 $(($num_process-1)));
     do
         python3 /tex-ray/generate_config.py $i /tex-ray/input/ >/dev/null 2>&1 &
     done
     wait
-    printf "Finished generating $(($num_process)) config files.\n"
+    printf "    Finished generating $(($num_process)) config files.\n"
 
     pids=()
     for i in $(seq 0 $(($num_process-1)));
@@ -52,7 +60,7 @@ while : ; do
         wait $pid
         rets+=($?)
     done
-    pids=()
+    pids=() # Clear it so we don't try to kill dead processes.
 
     success=0
     for ret in ${rets[*]}; do
@@ -61,11 +69,11 @@ while : ; do
         fi
     done
 
-    printf "Sucessfully generated $success/$num_process textile geometries.\n"
+    printf "    Sucessfully generated $success/$num_process textile geometries.\n"
 
     for i in $(seq 0 $(($num_process-1))); do
         if [[ "${rets[$i]}" -eq 0 ]]; then
-            python3 /tex-ray/batch_run.py /tex-ray/input/input_$i.json $database_path $chunk_size $generate_until &
+            python3 /tex-ray/batch_run.py /tex-ray/input/input_$i.json $database_path $chunk_size $generate_until >/dev/null 2>&1 & 
             mainpid=$!
             wait $mainpid
             if [ -f /tex-ray/input/finished ]; then
@@ -84,10 +92,12 @@ while : ; do
         rm -f /tex-ray/segmentations/segmentation_$i.tiff
     done
 
-    if [ ! -f /tex-ray/finished ]; then
-        printf "Finished processing $success samples.\n\n"
+    if [ ! -f /tex-ray/input/finished ]; then
+        printf "    Finished processing $success samples.\n\n"
     else
-        printf "Reached target database size: $generate_until. Terminating!\n"
+        printf "#####################################################################\n"
+        printf "### Reached target database size: $generate_until. Terminating! ###\n"
+        printf "#####################################################################\n"
         rm -f /tex-ray/input/finished
         break
     fi
