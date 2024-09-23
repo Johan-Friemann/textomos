@@ -28,19 +28,11 @@ if __name__ == "__main__":
     chunk_size = int(sys.argv[3])
     generate_until = int(sys.argv[4])
 
-    # If the database is already at or above final size; terminate.
-    if get_database_shape(database_path)[0] >= generate_until:
-        with open('/tex-ray/input/finished', 'w') as f:
-            f.write("FINISHED")
-        sys.exit(0)
-
     with open(config_path) as f:
         config_dict = json.load(f)
 
     sinograms = generate_sinograms(config_dict)
-    reconstruction = perform_tomographic_reconstruction(
-        sinograms, config_dict
-    )
+    reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
     tifffile.imwrite(
         config_dict["reconstruction_output_path"],
         reconstruction,
@@ -54,11 +46,9 @@ if __name__ == "__main__":
     )
     del segmentation
 
-    save_data(
-        database_path, config_dict, chunk_size=chunk_size
-    )
+    save_data(database_path, config_dict, chunk_size=chunk_size)
 
     # Strict equality here: if previous check didn't trigger <= will hold now.
     if get_database_shape(database_path)[0] == generate_until:
-        with open('/tex-ray/input/finished', 'w') as f:
+        with open("/tex-ray/input/finished", "w") as f:
             f.write("FINISHED")
