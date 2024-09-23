@@ -7,8 +7,6 @@ from segmentation import segment_reconstruction
 from hdf5_utils import save_data, get_database_shape
 
 """
-DO NOT RUN THIS FILE DIRECTLY!
-
 This is a utility file that is called from batch_run.sh. It's purpose is to run
 gvxr, reconstruct, segment, and save data to database.
 
@@ -25,14 +23,17 @@ The memory leak could be a bug in gvxr or an issue with tex-ray...
 if __name__ == "__main__":
     config_path = sys.argv[1]
     database_path = sys.argv[2]
-    chunk_size = int(sys.argv[3])
-    generate_until = int(sys.argv[4])
+    chunk_size = sys.argv[3]
+    generate_until = sys.argv[4]
 
     with open(config_path) as f:
         config_dict = json.load(f)
+    sinograms = generate_sinograms(config_dict)
 
     sinograms = generate_sinograms(config_dict)
-    reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
+    reconstruction = perform_tomographic_reconstruction(
+        sinograms, config_dict
+    )
     tifffile.imwrite(
         config_dict["reconstruction_output_path"],
         reconstruction,
@@ -46,9 +47,12 @@ if __name__ == "__main__":
     )
     del segmentation
 
-    save_data(database_path, config_dict, chunk_size=chunk_size)
+    save_data(
+        database_path, config_dict, chunk_size=chunk_size
+    )
 
-    # Strict equality here: if previous check didn't trigger <= will hold now.
-    if get_database_shape(database_path)[0] == generate_until:
-        with open("/tex-ray/input/finished", "w") as f:
+    num_datapoints = get_database_shape(database_path)[0]
+
+    if num_datapoints == generate_until:
+        with open('/tex-ray/input/finished', 'wb') as f:
             f.write("FINISHED")

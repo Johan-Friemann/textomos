@@ -1,4 +1,3 @@
-from multiprocessing import Process, Queue
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.ndimage import convolve1d
@@ -16,6 +15,9 @@ Important things to bear in mind:
       fluence mode. Additionally, gvxr.getUnitOfEnergy("MeV") returns 1.0.
     - The unit of length in gVirtualXRay is mm (milimeter). Therefore the
       function gvxr.getUnitOfLength("mm") returns 1.0.
+    - The point spread kernel standard deviation is not compensating for
+      binning. Therefore, the user must enter the PSF size for the binned
+      system.
 """
 
 
@@ -712,7 +714,7 @@ def perform_tomographic_scan(
                                  detector. Photon count is measured if false.
         photonic_noise (bool): If true photonic noise is added to projections.
         point_spread (float): Will add a point spread with specified kernel
-                              size if > 0.0.
+                              standard deviation if > 0.0.
 
     Returns:
         raw_projections (numpy array[float]): A numpy array of all measured
@@ -720,7 +722,8 @@ def perform_tomographic_scan(
                                               shape (num_projections,
                                               detector_rows, detector_columns).
     """
-    # No need to correct for binning since it is taken care of during set-up.
+    # We can't correct for binning of the psf. This the binned psf must be given
+    # by the user explicitly.
     # We do not need to account for binning in the noise since a sum of
     # Poisson distributed variables is Poisson distributed.
     detector_columns, detector_rows = gvxr.getDetectorNumberOfPixels()
@@ -907,21 +910,25 @@ def neg_log_transform(corrected_projections, threshold):
     return neg_log_projections
 
 
-def _generate_sinograms(xray_config_dict, queue):
-    """Perform an X-Ray CT scan of a sample. Do not use this function directly,
-    please use generate_sinograms instead.
+def generate_sinograms(config_dict):
+    """Perform an X-Ray CT scan of a sample and return the sinograms.
+
+    This function should be called once per program. This construction is needed
+    for multiple sequential simulations due to the nature of the gvxr singleton.
+    A new process must be spawned for each simulation to avoid loading into
+    the previous simulation.
 
     Args:
-        xray_config_dict (dictionary): A (checked for X-Ray options) dictionary
-                                      of tex_ray options.
-
-        queue (Queue): A queue that allows reading data from a process.
+        config_dict (dictionary): A dictionary of tex_ray options.
 
     Keyword args:
         -
     Returns:
-        -
+        sinograms (numpy array[float]): The measured CT sinograms. The array has
+                                        the shape (detector_rows,
+                                        number_of_projections, detector_columns)
     """
+    xray_config_dict = check_xray_config_dict(config_dict)
     gvxr.createOpenGLContext()
 
     set_up_detector(
@@ -973,8 +980,7 @@ def _generate_sinograms(xray_config_dict, queue):
         xray_config_dict["sample_rotation_direction"],
         display=xray_config_dict["display"],
         photonic_noise=xray_config_dict["photonic_noise"],
-        point_spread=xray_config_dict["point_spread"] 
-        / xray_config_dict["binning"], # Correct for binning here since no pass.
+        point_spread=xray_config_dict["point_spread"]
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()
@@ -993,45 +999,5 @@ def _generate_sinograms(xray_config_dict, queue):
 
     # Reformat the projections into a set of sinograms on the ASTRA form.
     sinograms = np.swapaxes(neg_log_projections, 0, 1)
-
-    queue.put(sinograms)
-    return None
-
-
-def generate_sinograms(config_dict):
-    """Perform an X-Ray CT scan of a sample and return the sinograms.
-
-    This function wraps _generate_sinograms. This construction is needed for
-    multiple sequential simulations due to the nature of the gvxr singleton.
-    A new process must be spawned for each simulation to avoid loading into
-    the previous simulation.
-
-    Args:
-        config_dict (dictionary): A dictionary of tex_ray options.
-
-    Keyword args:
-        -
-    Returns:
-        sinograms (numpy array[float]): The measured CT sinograms. The array has
-                                        the shape (detector_rows,
-                                        number_of_projections, detector_columns)
-    """
-    # We must check options here because an exception in the child hangs queue.
-    xray_config_dict = check_xray_config_dict(config_dict)
-
-    q = Queue(1)
-    p = Process(
-        target=_generate_sinograms,
-        args=(
-            xray_config_dict,
-            q,
-        ),
-    )
-    p.start()
-    sinograms = q.get()
-    p.join()
-    p.close()
-    q.close()
-    q.join_thread()
 
     return sinograms
