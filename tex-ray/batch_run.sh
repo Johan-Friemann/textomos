@@ -94,7 +94,7 @@ while : ; do
     done
     config_pids=() # Clear it so we don't try to kill dead processes.
     if [ -f /tex-ray/input/finished ]; then
-        printf "Database already at or above target size: $generate_until; Terminating!.\n"
+        printf "Database size already at or above target size: $generate_until; Terminating!.\n"
         for i in $(seq 0 $(($num_process-1)));
         do
             rm -f /tex-ray/input/input_$i.json
