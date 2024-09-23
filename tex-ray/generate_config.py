@@ -602,7 +602,7 @@ if __name__ == "__main__":
     path = sys.argv[2]
     base_input_path = sys.argv[3]
     database_path = sys.argv[4]
-    generate_until = sys.argv[5]
+    generate_until = int(sys.argv[5])
 
     # If the database exists and is already at or above final size; terminate.
     if os.path.isdir(database_path):
