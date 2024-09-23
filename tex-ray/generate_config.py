@@ -6,10 +6,7 @@ import random
 from yarn_attenuation_util import *
 
 """
-This files contains routines for running several simulations in batches
-(including domain randomization). Data will be added to a database based on
-hdf5 files. If a database already exists data is appended, otherwise the
-database is created.
+This files contains routines for generating tex-ray config files.
 """
 
 
@@ -611,5 +608,4 @@ def generate_config(
 if __name__ == "__main__":
     sim_id = sys.argv[1]
     path = sys.argv[2]
-
     generate_config(sim_id, path, parameters={})
