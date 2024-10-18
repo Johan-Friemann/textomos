@@ -33,14 +33,16 @@ class TexRayDataset(Dataset):
         database_path (str): The absolute path to the database folder.
 
     Keyword params:
-        normalize (bool): Will first scale the data so it is in the range 0 to 1
-                          (min-max scaling).
+        z_score (tuple(float, float)): Mean and standard deviation to use for
+                                       z-score normalization. If either is None
+                                       no normalization is performed.
     """
 
-    def __init__(self, database_path, normalize=False):
+    def __init__(self, database_path, z_score=(None, None)):
         self.database_path = database_path
 
-        self.normalize = normalize
+        self.mean = z_score[0]
+        self.std = z_score[1]
 
         # data_0 is guaranteed to exist
         detector_rows = get_metadata(database_path, 0, "detector_rows")
@@ -87,10 +89,8 @@ class TexRayDataset(Dataset):
         recon_slice = torch.tensor(
             self.recon_data[chunk_idx][local_idx][slice_idx]
         ).unsqueeze(0)
-        if self.normalize:
-            recon_slice = (recon_slice - torch.min(recon_slice)) / (
-                torch.max(recon_slice) - torch.min(recon_slice)
-            )
+        if (not self.mean is None) and (not self.std is None):
+            recon_slice = (recon_slice - self.mean) / self.std
 
         seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
         seg_mask = torch.zeros(
@@ -101,11 +101,85 @@ class TexRayDataset(Dataset):
 
         return recon_slice, seg_mask
 
-    def get_loss_weights(self):
-        """Get dataset median frequency balancing weights.
+    def compute_min_max(self, device):
+        """Compute the dataset min max normalization statistics. This is very
+        slow for large datasets. It is therefore recommended to do it in advance
+        and save it to avoid waiting during model prototyping.
 
         Args:
+            device (torch device): Device to perform computations on.
+
+        Keyword args:
             -
+
+        Returns:
+            min (float): The dataset minimum value.
+            max (float): The dataset maximum value.
+        """
+        min_candidate = torch.tensor([0.0]).to(device)
+        max_candidate = torch.tensor([0.0]).to(device)
+        min_val = torch.tensor([100.0]).to(device)
+        max_val = torch.tensor([-100.0]).to(device)
+        for global_idx in range(self.num_samples):
+            chunk_idx = global_idx // self.chunk_size
+            local_idx = global_idx % self.chunk_size
+
+            recon_sample = torch.tensor(
+                self.recon_data[chunk_idx][local_idx][:]
+            ).to(device)
+
+            min_candidate = torch.min(recon_sample)
+            max_candidate = torch.max(recon_sample)
+            min_val = torch.min(min_val, min_candidate)
+            max_val = torch.max(max_val, max_candidate)
+
+        return min_val.item(), max_val.item()
+
+    def compute_z_score(self, device):
+        """Compute the dataset z-score normalization statistics. This is VERY
+        slow for large datasets. It is therefore recommended to do it in advance
+        and save it to avoid waiting during model prototyping.
+
+        Args:
+            device (torch device): Device to perform computations on.
+
+        Keyword args:
+            -
+
+        Returns:
+            mean (float): The dataset mean value.
+            std (float): The dataset standard deviation.
+
+        """
+        mean = torch.tensor([0.0]).to(device)
+        var = torch.tensor([0.0]).to(device)
+        for global_idx in range(self.num_samples):
+            chunk_idx = global_idx // self.chunk_size
+            local_idx = global_idx % self.chunk_size
+            recon_sample = torch.tensor(
+                self.recon_data[chunk_idx][local_idx][:]
+            ).to(device)
+            mean += torch.mean(recon_sample)
+        mean /= self.num_samples
+
+        for global_idx in range(self.num_samples):
+            chunk_idx = global_idx // self.chunk_size
+            local_idx = global_idx % self.chunk_size
+            recon_sample = torch.tensor(
+                self.recon_data[chunk_idx][local_idx][:]
+            ).to(device)
+            var += torch.sum((recon_sample - mean) ** 2)
+        var /= self.num_samples * self.slices_per_sample**3 - 1
+
+        return mean.item(), numpy.sqrt(var.item())
+
+    def compute_loss_weights(self, device):
+        """Compute the dataset median frequency balancing weights. This is very
+        slow for large datasets. It is therefore recommended to do it in advance
+        and save it to avoid waiting during model prototyping.
+
+        Args:
+            device (torch device): Device to perform computations on.
 
         Keyword args:
             -
@@ -115,19 +189,15 @@ class TexRayDataset(Dataset):
                                     frequency balancing weights. They are:
                                     given as [air, matrix, weft, warp].
         """
-        class_freq = torch.tensor([0, 0, 0, 0])
-        for idx in range(self.num_samples * self.slices_per_sample):
-            global_idx = idx // self.slices_per_sample
+        class_freq = torch.tensor([0, 0, 0, 0]).to(device)
+        for global_idx in range(self.num_samples):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
-            slice_idx = idx % self.slices_per_sample
-
-            seg_slice = torch.tensor(
-                self.seg_data[chunk_idx][local_idx][slice_idx]
-            )
+            seg_sample = torch.tensor(
+                self.seg_data[chunk_idx][local_idx][:]
+            ).to(device)
             for i in range(4):
-                class_freq[i] += torch.sum(seg_slice == i)
-
+                class_freq[i] += torch.sum(seg_sample == i)
         median = torch.median(class_freq)
         return median / class_freq
 
@@ -723,9 +793,21 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
 
 
 if __name__ == "__main__":
+    # max: 4.202881813049316
+    # min: 0.0
+    # mean: 0.20771875977516174
+    # std: 0.25910180825541423
+    # balancing weights: [0.1242, 1.0038, 1.0000, 0.6890]
+    training_data_path = "./tex-ray/training_set"
+    validation_data_path = "./tex-ray/validation_set"
+    testing_data_path = "./tex-ray/testing_set"
     state_dict_path = "./tex-ray/state_dict.pt"
     inferenece_input_path = "./tex-ray/reconstructions/reconstruction.tiff"
     inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
+
+    data_mean = 0.20772
+    data_std = 0.25910
+    data_weight = [0.1242, 1.0038, 1.0000, 0.6890]
     inference = True
     train = True
     normalize = True
@@ -743,10 +825,18 @@ if __name__ == "__main__":
     model = model.to(device)
 
     if train:
-        dataset = TexRayDataset("./tex-ray/database", normalize=normalize)
-        weight = dataset.get_loss_weights().to(device)
-        dataloaders = build_dataloaders_from_single_set(
-            dataset, batch_size, num_workers, generator
+        training_set = TexRayDataset(
+            training_data_path, z_score=(data_mean, data_std)
+        )
+        validation_set = TexRayDataset(
+            validation_data_path, z_score=(data_mean, data_std)
+        )
+        testing_set = TexRayDataset(
+            testing_data_path, z_score=(data_mean, data_std)
+        )
+        weight = torch.tensor(data_weight).to(device)
+        dataloaders = build_dataloaders_from_multiple_sets(
+            [training_set, validation_set, testing_set], batch_size, num_workers, generator
         )
 
         criterion = nn.CrossEntropyLoss(weight=weight)
