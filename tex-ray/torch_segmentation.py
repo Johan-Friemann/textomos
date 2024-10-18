@@ -836,7 +836,10 @@ if __name__ == "__main__":
         )
         weight = torch.tensor(data_weight).to(device)
         dataloaders = build_dataloaders_from_multiple_sets(
-            [training_set, validation_set, testing_set], batch_size, num_workers, generator
+            [training_set, validation_set, testing_set],
+            batch_size,
+            num_workers,
+            generator,
         )
 
         criterion = nn.CrossEntropyLoss(weight=weight)
