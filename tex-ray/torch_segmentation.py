@@ -211,10 +211,32 @@ class TIFFDataset(Dataset):
 
     Keyword params:
         slice_axis (str): The axis along which to take slices.
+
+        z_score (tuple(float, float)): Mean and standard deviation to use for
+                                       z-score normalization. If either is None
+                                       no normalization is performed.
+
+        cutoff (tuple(float, float)): Lower and upper cutoff values. Sets
+                                      values in reconstruction slices to
+                                      cutoff[0] if lower than cutofff[0] and
+                                      sets values to cutoff[1] if larger
+                                      than cutoff[1]. If an entry is 'None',
+                                      that bound is skipped.
     """
 
-    def __init__(self, tiff_path, slice_axis="x"):
+    def __init__(
+        self,
+        tiff_path,
+        slice_axis="x",
+        z_score=(None, None),
+        cutoff=(-1.0, 1.0),
+    ):
         self.tiff_path = tiff_path
+
+        self.mean = z_score[0]
+        self.std = z_score[1]
+        self.min_val = cutoff[0]
+        self.max_val = cutoff[1]
 
         self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
         if slice_axis == "x":
@@ -234,6 +256,15 @@ class TIFFDataset(Dataset):
 
         # Unsqueeze to create a channel axis for consistency.
         recon_slice = self.reconstruction[idx].unsqueeze(0)
+
+        if not self.min_val is None:
+            recon_slice[recon_slice < self.min_val] = self.min_val
+
+        if not self.max_val is None:
+            recon_slice[recon_slice > self.max_val] = self.max_val
+
+        if (not self.mean is None) and (not self.std is None):
+            recon_slice = (recon_slice - self.mean) / self.std
 
         return recon_slice
 
@@ -680,37 +711,6 @@ def train_model(
     return None
 
 
-def run_inference_on_slice(model, input):
-    """Use model to run inference on input and return the segmentation.
-
-
-    Args:
-        model (torch model): The model to utilize.
-
-        input (torch tensor):  A tensor of size 1 batch x num channels x height
-                               x width, that is to be used by model for
-                               prediction.
-
-    Keyword args:
-        -
-
-    Returns:
-        prediction (torch tensor): A tensor of size 1 batch x 1 channel x height
-                                   x width, that contains the predicted
-                                   segmentation.
-    """
-    input[input > 1.0] = 1.0  # Remove zingers that can mess up normalization.
-    # We normalize here instead of inside the dataloader such that we can show
-    # the original image together with the segmentation.
-    transformed_input = (input - torch.min(input)) / (
-        torch.max(input) - torch.min(input)
-    )
-    # Argmax transforms probabilities into a segmented slice.
-    prediction = model(transformed_input)["out"].argmax(1)
-
-    return prediction
-
-
 def segment_slice_from_dataloader(model, dataloader, slice_idx):
     """Use model to segment the slice with index slice_idx from dataloader.
 
@@ -745,7 +745,7 @@ def segment_slice_from_dataloader(model, dataloader, slice_idx):
         input = input[0]
     input = input.to(device)
 
-    prediction = run_inference_on_slice(model, input)
+    prediction = model(input)["out"].argmax(1)
 
     return input, prediction
 
@@ -777,7 +777,7 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
     iterator = iter(dataloader)
     for slice_idx, input in enumerate(iterator):
         input = input.to(device)
-        prediction = run_inference_on_slice(model, input)
+        prediction = model(input)["out"].argmax(1)
         segmented_volume[slice_idx] = prediction
 
     # We need to permute our axes back to match original tiff-file.
@@ -867,7 +867,9 @@ if __name__ == "__main__":
     if inference:
         model.load_state_dict(torch.load(state_dict_path))
         model.eval()
-        test_set = TIFFDataset(inferenece_input_path)
+        test_set = TIFFDataset(
+            inferenece_input_path, z_score=(data_mean, data_std)
+        )
         test_loader = DataLoader(
             test_set, batch_size=1, shuffle=False, num_workers=1
         )
