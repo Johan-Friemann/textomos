@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04
 # This environment variable is needed during build time to prevent apt getting
 # stuck on time-zone or keyboard layout selection prompts.
 ARG DEBIAN_FRONTEND=noninteractive
@@ -13,11 +13,16 @@ RUN apt update && apt upgrade -y && \
                    python3 \
                    python3-dev \
                    python3-pip \
+                   python3-tk \
                    freeglut3-dev \
                    libboost-all-dev \
                    libxcb-cursor0 \
                    imagemagick \
-                   xterm
+                   xterm \
+                   dvipng \
+                   texlive-latex-extra \
+                   texlive-fonts-recommended \
+                   cm-super
 
 # Build base functionality of TexGen.
 # First sed fixes lower/upper case bug, second sed hard-mutes TexGen logger...
@@ -52,10 +57,11 @@ RUN cd TexGen/bin && \
 # Clean up!
 #RUN rm -rf TexGen
 
-# Install python packages.
+# Install python packages. Fix gvxr due to bug in 2.0.8
 RUN pip3 install git+https://bitbucket.org/spekpy/spekpy_release.git \
-        numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr torch \
-        torchvision cupy-cuda12x meshio pymeshlab olefile scikit-image h5py
+        numpy numpy-stl scipy Cython matplotlib tifffile xpecgen gvxr==2.0.7 \
+        torch torchvision cupy-cuda12x meshio pymeshlab olefile scikit-image \
+        h5py
 
 # Install astra-toolbox.
 RUN git clone https://github.com/astra-toolbox/astra-toolbox.git && \
