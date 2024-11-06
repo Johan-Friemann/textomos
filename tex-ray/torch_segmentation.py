@@ -4,7 +4,7 @@ import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.transforms import v2
 from torchvision.utils import draw_segmentation_masks
 from torchvision.models.segmentation import (
@@ -12,6 +12,8 @@ from torchvision.models.segmentation import (
     DeepLabV3_ResNet50_Weights,
     deeplabv3_resnet101,
     DeepLabV3_ResNet101_Weights,
+    deeplabv3_mobilenet_v3_large,
+    DeepLabV3_MobileNet_V3_Large_Weights,
     fcn_resnet50,
     FCN_ResNet50_Weights,
     fcn_resnet101,
@@ -269,6 +271,29 @@ class TIFFDataset(Dataset):
         return recon_slice
 
 
+class JaccardLoss(nn.Module):
+    """See pytorch module documentation for specifics of forward type method
+       that is required by the nn.Module interface.
+
+    Compute the Jaccard Loss (intersection over union).
+
+    Params:
+        -
+
+    Keyword params:
+        -
+    """
+    def __init__(self):
+        super(JaccardLoss, self).__init__()
+
+    def forward(self, inputs, targets):
+        inputs = torch.softmax(inputs, 1)
+        intersection = torch.sum(inputs * targets, (2, 3))
+        union = torch.sum(inputs + targets, (2, 3)) - intersection
+        jaccard_loss = 1 - torch.mean(intersection / union, 1)
+        return torch.mean(jaccard_loss)
+
+
 def seed_all(rng_seed):
     """Seed all random number generators for reproducibility.
 
@@ -321,6 +346,10 @@ def build_model(
         if pre_trained:
             weights = DeepLabV3_ResNet101_Weights.DEFAULT
         segmentation_model = deeplabv3_resnet101(weights=weights)
+    elif model == "deeplabv3_mobilenet_v3":
+        if pre_trained:
+            weights = DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT
+        segmentation_model = deeplabv3_mobilenet_v3_large(weights=weights)
     elif model == "fcn_resnet50":
         if pre_trained:
             weights = FCN_ResNet50_Weights.DEFAULT
@@ -333,19 +362,33 @@ def build_model(
         raise ValueError("Unsupported model: '" + model + "'.")
 
     # Replace input to accomodate n channel input data.
-    segmentation_model.backbone.conv1 = nn.Conv2d(
-        input_channels,
-        64,
-        kernel_size=(7, 7),
-        stride=(2, 2),
-        padding=(3, 3),
-        bias=False,
-    )
+    if model == "deeplabv3_mobilenet_v3":
+        segmentation_model.backbone["0"] = nn.Conv2d(
+            input_channels,
+            16,
+            kernel_size=(3, 3),
+            stride=(2, 2),
+            padding=(1, 1),
+            bias=False,
+        )
+    else:
+        segmentation_model.backbone.conv1 = nn.Conv2d(
+            input_channels,
+            64,
+            kernel_size=(7, 7),
+            stride=(2, 2),
+            padding=(3, 3),
+            bias=False,
+        )
 
     # Different architectures have different last layer shape.
     if model in ["fcn_resnet50", "fcn_resnet101"]:
         last_layer_input_size = 512
-    if model in ["deeplabv3_resnet50", "deeplabv3_resnet101"]:
+    if model in [
+        "deeplabv3_resnet50",
+        "deeplabv3_resnet101",
+        "deeplabv3_mobilenet_v3",
+    ]:
         last_layer_input_size = 256
 
     # Replace output such that there are 4 classes to classify.
@@ -539,7 +582,9 @@ def draw_image_with_masks(
     return None
 
 
-def one_epoch(model, criterion, optimizer, dataloader, device, mode):
+def one_epoch(
+    model, criterion, optimizer, dataloader, device, mode, scheduler=None
+):
     """Process one (1) epoch. This can be either training or validation.
 
 
@@ -561,7 +606,10 @@ def one_epoch(model, criterion, optimizer, dataloader, device, mode):
                     model is validated.
 
     Keyword args:
-        -
+        scheduler (torch learning rate scheduler): The learning rate scheduler.
+                                                   to utilze during training.
+                                                   Is called once per iteration
+                                                   if not ReduceLROnPlateau.
 
     Returns:
         epoch_loss (float): The epoch loss. This is the sum of all batch losses
@@ -590,6 +638,10 @@ def one_epoch(model, criterion, optimizer, dataloader, device, mode):
             if mode == "training":
                 loss.backward()
                 optimizer.step()
+                if not scheduler is None and not isinstance(
+                    scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                ):
+                    scheduler.step()
 
         batch_loss = loss.item()
         epoch_loss += batch_loss
@@ -648,7 +700,9 @@ def train_model(
 
         scheduler (torch learning rate scheduler): The learning rate scheduler.
                                                    to utilze during training.
-                                                   Is called once per epoch.
+                                                   Is called once per epoch for
+                                                   ReduceLROnPlateau and once
+                                                   per iteration else.
     Returns:
         -
     """
@@ -674,7 +728,13 @@ def train_model(
 
         for mode in ["training", "validation"]:
             epoch_loss = one_epoch(
-                model, criterion, optimizer, dataloaders[mode], device, mode
+                model,
+                criterion,
+                optimizer,
+                dataloaders[mode],
+                device,
+                mode,
+                scheduler=scheduler,
             )
             loss_str = "{:.6f}".format(epoch_loss)
             if mode == "training":
@@ -685,6 +745,11 @@ def train_model(
                     " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
             if mode == "validation":
+                # Reduce LR on plateau should be called once per epoch.
+                if isinstance(
+                    scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                ):
+                    scheduler.step(epoch_loss)
                 if epoch_loss < best_loss:
                     best_loss = epoch_loss
                     loss_str += " *"
@@ -697,15 +762,13 @@ def train_model(
                     " " * (num_space // 2 + (num_space % 2) - 1) + "||",
                 )
 
-        if scheduler is not None:
-            scheduler.step()
-            current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
-            num_space = 35 - len(current_lr_str)
-            print(
-                "||" + " " * (num_space // 2 - 1),
-                "Updating learning rate to: " + current_lr_str,
-                " " * (num_space // 2 + (num_space % 2) - 1) + "||",
-            )
+        current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
+        num_space = 36 - len(current_lr_str)
+        print(
+            "||" + " " * (num_space // 2 - 1),
+            "Current learning rate is: " + current_lr_str,
+            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+        )
         print("-" * 66)
 
     return None
@@ -811,6 +874,7 @@ if __name__ == "__main__":
     inference = True
     train = True
     normalize = True
+    shuffle = True
     batch_size = 8
     num_epochs = 20
     learn_rate = 0.001
@@ -840,6 +904,7 @@ if __name__ == "__main__":
             batch_size,
             num_workers,
             generator,
+            shuffle=shuffle,
         )
 
         criterion = nn.CrossEntropyLoss(weight=weight)
