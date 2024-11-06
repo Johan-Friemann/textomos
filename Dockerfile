@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04
 # This environment variable is needed during build time to prevent apt getting
 # stuck on time-zone or keyboard layout selection prompts.
 ARG DEBIAN_FRONTEND=noninteractive
