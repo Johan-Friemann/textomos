@@ -1,8 +1,8 @@
+import numpy as np
 import matplotlib.pyplot as plt
+import tifffile
 from matplotlib_scalebar.scalebar import ScaleBar
-import torch
-from torch.utils.data import DataLoader
-from torch_segmentation import TexRayDataset, TIFFDataset
+import hdf5_utils
 
 plt.rcParams.update({"text.usetex": True, "font.family": "serif"})
 
@@ -12,19 +12,24 @@ This file contains small utility scripts for inspecting a dataset.
 It includes plotting individual slices and dataset histograms.
 """
 
-def compute_dataset_histogram(dataloader, bins, lims):
-    counts = torch.zeros(bins, dtype=torch.float32)
-    iterator = iter(dataloader)
-    for slice in iterator:
-        if type(slice) is list:  # Deal with TIFFDataset vs TexRayDataset
-            slice = slice[0]
-        counts += torch.histc(slice, bins=bins, min=lims[0], max=lims[1])
+
+def compute_dataset_histogram(path, bins, lims):
+    counts = np.zeros(bins, dtype=np.float32)
+    try:
+        num_samples = hdf5_utils.get_database_shape(path)[0]
+        for idx in range(num_samples):
+            sample = hdf5_utils.get_reconstruction_from_database(path, idx)
+            counts += np.histogram(sample, bins=bins, range=lims)[0]
+    except:
+        sample = tifffile.imread(path)
+        counts += np.histogram(sample, bins=bins, range=lims)[0]
+
     return counts
 
 
 def plot_histogram(counts, bins, lims, title, xlabel, ylabel, scale, savepath):
-    edges = torch.arange(lims[0], lims[1], (lims[1] - lims[0]) / (bins + 1))
-    plt.figure(figsize=(5.00*scale, 3.76*scale), layout="constrained")
+    edges = np.arange(lims[0], lims[1], (lims[1] - lims[0]) / (bins + 1))
+    plt.figure(figsize=(5.00 * scale, 3.76 * scale), layout="constrained")
     plt.stairs(counts, edges=edges, fill=True)
     plt.xticks(fontsize=11)
     plt.xlabel(xlabel)
@@ -37,20 +42,15 @@ def plot_histogram(counts, bins, lims, title, xlabel, ylabel, scale, savepath):
 
 
 def plot_slice(
-    dataloader,
-    slice_idx,
+    slice,
+    lims,
     dx,
     scale,
     txt,
     txtclr,
     savepath,
 ):
-    iterator = iter(dataloader)
-    for i in range(slice_idx + 1):
-        slice = next(iterator)
-    if type(slice) is list:  # Deal with TIFFDataset vs TexRayDataset
-        slice = slice[0]
-    plt.figure(figsize=(5.00*scale, 5.00*scale), layout="constrained")
+    plt.figure(figsize=(5.00 * scale, 5.00 * scale), layout="constrained")
     scalebar = ScaleBar(
         dx=dx,
         units="um",
@@ -58,35 +58,31 @@ def plot_slice(
         color="r",
         length_fraction=0.5,
     )
-    plt.text(20,25,txt,color=txtclr,backgroundcolor="w")
+    plt.imshow(
+        slice,
+        cmap="gray",
+        vmin=lims[0],
+        vmax=lims[1],
+        origin="lower",
+    )
+    plt.text(20, 25, txt, color=txtclr, backgroundcolor="w")
     plt.gca().add_artist(scalebar)
     plt.axis("off")
     plt.savefig(savepath)
 
 
 if __name__ == "__main__":
-    input_path = "./tex-ray/reconstructions"
-    dataset = TIFFDataset(input_path)
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=1)
-    bins = 10000
-    lims = (1e-6, 0.6)
-    counts = compute_dataset_histogram(dataloader, bins, lims)
-    plot_histogram(
-        counts,
-        bins,
-        "Histogram of voxel values",
-        "Attenuation (1/cm)",
-        "Counts (-)",
-        0.75,
-        "./tex-ray/histogram.pdf",
-    )
-
+    database_path = "./tex-ray/training_set"
+    lims = (0, 3)
+    slice = hdf5_utils.get_reconstruction_from_database(database_path, 100)[
+        :, :, 236
+    ]
     plot_slice(
-        dataloader,
-        320,
-        46.96,
+        slice,
+        lims,
+        46.19,
         0.48,
         "$yz$",
         "g",
-        "./tex-ray/yz_slice.pdf",
+        "./tex-ray/sim_yz_slice.pdf",
     )
