@@ -4,6 +4,7 @@ import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.transforms import v2
 from torchvision.utils import draw_segmentation_masks
@@ -283,6 +284,7 @@ class JaccardLoss(nn.Module):
     Keyword params:
         -
     """
+
     def __init__(self):
         super(JaccardLoss, self).__init__()
 
@@ -583,7 +585,15 @@ def draw_image_with_masks(
 
 
 def one_epoch(
-    model, criterion, optimizer, dataloader, device, mode, scheduler=None
+    model,
+    criterion,
+    optimizer,
+    dataloader,
+    device,
+    mode,
+    epoch=0,
+    writer=None,
+    scheduler=None,
 ):
     """Process one (1) epoch. This can be either training or validation.
 
@@ -611,6 +621,12 @@ def one_epoch(
                                                    Is called once per iteration
                                                    if not ReduceLROnPlateau.
 
+        epoch (int): The current epoch number. Used to compute the iteration
+                     number for the summary writer (if it exists).
+
+        writer (torch summary writer): A summary writer object that logs the
+                                       iteration loss values.
+
     Returns:
         epoch_loss (float): The epoch loss. This is the sum of all batch losses
                             divided by the number of batches in the epoch.
@@ -635,6 +651,19 @@ def one_epoch(
         with torch.set_grad_enabled(mode == "training"):
             outputs = model(inputs)["out"]
             loss = criterion(outputs, labels)
+            if not writer is None:
+                if mode == "training":
+                    writer.add_scalar(
+                        "Training loss",
+                        loss,
+                        epoch * num_batches + current_batch,
+                    )
+                else:
+                    writer.add_scalar(
+                        "Validation loss",
+                        loss,
+                        epoch * num_batches + current_batch,
+                    )
             if mode == "training":
                 loss.backward()
                 optimizer.step()
@@ -667,6 +696,7 @@ def train_model(
     dataloaders,
     device,
     num_epochs,
+    writer=None,
     scheduler=None,
     state_dict_path=None,
 ):
@@ -693,6 +723,9 @@ def train_model(
         num_epochs (int): The number of epochs to train the model.
 
     Keyword args:
+        writer (torch summary writer): A summary writer object that logs the
+                                       iteration loss values.
+
         state_dict_path (str): The absolute path to where to save the state
                                dictionary. The function continuously saves the
                                set of weights that results in the current lowest
@@ -734,6 +767,8 @@ def train_model(
                 dataloaders[mode],
                 device,
                 mode,
+                epoch=epoch,
+                writer=writer,
                 scheduler=scheduler,
             )
             loss_str = "{:.6f}".format(epoch_loss)
@@ -855,6 +890,50 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
     return segmented_volume
 
 
+def compute_dataset_loss(model, dataloader, device, loss_function):
+    """Compute the loss of an entire data set.
+
+    Args:
+        model (torch model): The model to utilize.
+
+        dataloader (torch dataloader):  The dataloader from which the data set
+                                        to be evaluated is loaded.
+
+        device (torch device): The device (cpu/gpu) that will be used to load
+                               the model.
+
+        loss_function (torch loss function):  The loss function with which to
+                                              evaluate the loss.
+
+    Keyword args:
+        -
+
+    Returns:
+        mean_loss (float): The average loss of the data set.
+
+        min_loss (float): The minimum loss in the data set.
+
+        max_loss (float): The maximum loss in the data set.
+    """
+    min_loss = 1000.0
+    max_loss = -1000.0
+    mean_loss = 0.0
+    i = 0
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            i += 1
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            outputs = model(inputs)["out"]
+            loss = loss_function(outputs, labels)
+            loss_val = loss.item()
+            mean_loss += loss_val
+            min_loss = loss_val if loss_val < min_loss else min_loss
+            max_loss = loss_val if loss_val > max_loss else max_loss
+        mean_loss /= len(dataloader)
+    return mean_loss, min_loss, max_loss
+
+
 if __name__ == "__main__":
     # max: 4.202881813049316
     # min: 0.0
@@ -876,9 +955,9 @@ if __name__ == "__main__":
     normalize = True
     shuffle = True
     batch_size = 8
-    num_epochs = 20
-    learn_rate = 0.001
-    weight_decay = 0.001
+    num_epochs = 100
+    learn_rate = 0.0001
+    weight_decay = 0.0016
     momentum = 0.9
     num_workers = 4
     rng_seed = 0
@@ -887,6 +966,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = build_model()
     model = model.to(device)
+    writer = SummaryWriter(flush_secs=1)
 
     if train:
         training_set = TexRayDataset(
@@ -915,7 +995,9 @@ if __name__ == "__main__":
             momentum=momentum,
         )
         scheduler = optim.lr_scheduler.PolynomialLR(
-            optimizer, total_iters=num_epochs, power=0.9
+            optimizer,
+            total_iters=num_epochs * len(training_set) // batch_size,
+            power=0.9,
         )
 
         train_model(
@@ -925,6 +1007,7 @@ if __name__ == "__main__":
             dataloaders,
             device,
             num_epochs,
+            writer=writer,
             scheduler=scheduler,
             state_dict_path=state_dict_path,
         )
@@ -933,7 +1016,9 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(state_dict_path))
         model.eval()
         test_set = TIFFDataset(
-            inferenece_input_path, z_score=(data_mean, data_std)
+            inferenece_input_path,
+            z_score=(data_mean, data_std),
+            cutoff=(0.0, 1.0),
         )
         test_loader = DataLoader(
             test_set, batch_size=1, shuffle=False, num_workers=1
