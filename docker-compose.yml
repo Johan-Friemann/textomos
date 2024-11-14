@@ -21,3 +21,5 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
     ipc: host
+    ports:
+      - 12345:6006
