@@ -1,4 +1,5 @@
 import random
+import itertools
 import tifffile
 import numpy
 import torch
@@ -588,14 +589,13 @@ def one_epoch(
     model,
     criterion,
     optimizer,
-    dataloader,
+    dataloaders,
     device,
-    mode,
     epoch=0,
     writer=None,
     scheduler=None,
 ):
-    """Process one (1) epoch. This can be either training or validation.
+    """Process one (1) epoch.
 
 
     Args:
@@ -606,14 +606,12 @@ def one_epoch(
 
         optimizer (torch optimizer): Optimizer to use for training.
 
-        dataloader (torch dataloader): Dataloader for loading data for training/
-                                       validation.
+        dataloaders (dict{torch dataloader}): Dataloaders for loading data for
+                                              training and validation.
 
         device (torch device): The device (cpu/gpu) that will be used to load/
                                train the model.
 
-        mode (str): If set to "training" the model will be trained, else the
-                    model is validated.
 
     Keyword args:
         scheduler (torch learning rate scheduler): The learning rate scheduler.
@@ -631,62 +629,71 @@ def one_epoch(
         epoch_loss (float): The epoch loss. This is the sum of all batch losses
                             divided by the number of batches in the epoch.
     """
-    if mode == "training":
-        header = "Training"
-        model.train()
-    else:
-        header = "Evaluation"
-        model.eval()
+    num_batches = len(dataloaders["training"])
+    num_val = len(dataloaders["validation"])
 
-    num_batches = len(dataloader)
-    epoch_loss = 0.0
-    current_batch = 0
+    repeats = num_batches // num_val + (num_batches % num_val > 0)
 
-    for inputs, labels in dataloader:
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-        current_batch += 1
+    iter_loader = {
+        "training": iter(dataloaders["training"]),
+        "validation": itertools.chain.from_iterable(
+            itertools.repeat(dataloaders["validation"], repeats)
+        ),
+    }
 
-        optimizer.zero_grad()
-        with torch.set_grad_enabled(mode == "training"):
-            outputs = model(inputs)["out"]
-            loss = criterion(outputs, labels)
-            if not writer is None:
-                if mode == "training":
-                    writer.add_scalar(
-                        "Training loss",
-                        loss,
-                        epoch * num_batches + current_batch,
-                    )
-                else:
-                    writer.add_scalar(
-                        "Validation loss",
-                        loss,
-                        epoch * num_batches + current_batch,
-                    )
+    training_epoch_loss = 0.0
+    validation_epoch_loss = 0.0
+
+    for batch_idx in range(num_batches):
+        loss_str = ""
+        for mode in ["training", "validation"]:
+            inputs, labels = next(iter_loader[mode])
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
             if mode == "training":
-                loss.backward()
-                optimizer.step()
-                if not scheduler is None and not isinstance(
-                    scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
-                ):
-                    scheduler.step()
+                model.train()
+            else:
+                model.eval()
 
-        batch_loss = loss.item()
-        epoch_loss += batch_loss
-        loss_str = "{:.6f}".format(batch_loss)
-        progress_str = "{:7.2%}".format(current_batch / num_batches)
-
-        num_space = 28 - len(header) - len(loss_str) - len(progress_str)
+            optimizer.zero_grad()
+            with torch.set_grad_enabled(mode == "training"):
+                outputs = model(inputs)["out"]
+                loss = criterion(outputs, labels)
+                if mode == "training":
+                    loss.backward()
+                    optimizer.step()
+                    if not scheduler is None and not isinstance(
+                        scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                    ):
+                        scheduler.step()
+                    training_loss = loss.item()
+                    loss_str += "{:.6f}, ".format(training_loss)
+                    training_epoch_loss += training_loss
+                else:
+                    validation_loss = loss.item()
+                    loss_str += "{:.6f}".format(validation_loss)
+                    validation_epoch_loss += validation_loss
+        if not writer is None:
+            writer.add_scalars(
+                "Loss",
+                {"Training": training_loss, "Validation": validation_loss},
+                epoch * num_batches + batch_idx,
+            )
+        progress_str = "{:5.2%}".format(batch_idx / num_batches)
+        num_space = 24 - len(loss_str) - len(progress_str)
         print(
-            "||" + " " * (num_space // 2 - 1) + header + " progress: ",
-            progress_str + " | Current batch loss: " + loss_str,
-            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+            "|| Progress: ",
+            progress_str + " | Training, Validation: " + loss_str,
+            " " * (num_space) + "||",
             end="\r",
         )
 
     print(" " * 67, end="\r")  # Clear such that following text prints cleanly.
-    return epoch_loss / num_batches
+    return (
+        training_epoch_loss / num_batches,
+        validation_epoch_loss / num_batches,
+    )
 
 
 def train_model(
@@ -701,7 +708,6 @@ def train_model(
     state_dict_path=None,
 ):
     """Train a torch model for one or more epochs.
-
 
     Args:
         model (torch model): The model to train.
@@ -759,43 +765,39 @@ def train_model(
             " " * (num_space // 2 + (num_space % 2) - 1) + "||",
         )
 
-        for mode in ["training", "validation"]:
-            epoch_loss = one_epoch(
-                model,
-                criterion,
-                optimizer,
-                dataloaders[mode],
-                device,
-                mode,
-                epoch=epoch,
-                writer=writer,
-                scheduler=scheduler,
-            )
-            loss_str = "{:.6f}".format(epoch_loss)
-            if mode == "training":
-                num_space = 41 - len(loss_str)
-                print(
-                    "||" + " " * (num_space // 2 - 1),
-                    "Training epoch loss: " + loss_str,
-                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
-                )
-            if mode == "validation":
-                # Reduce LR on plateau should be called once per epoch.
-                if isinstance(
-                    scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
-                ):
-                    scheduler.step(epoch_loss)
-                if epoch_loss < best_loss:
-                    best_loss = epoch_loss
-                    loss_str += " *"
-                    if state_dict_path is not None:
-                        torch.save(model.state_dict(), state_dict_path)
-                num_space = 39 - len(loss_str)
-                print(
-                    "||" + " " * (num_space // 2 - 1),
-                    "Validation epoch loss: " + loss_str,
-                    " " * (num_space // 2 + (num_space % 2) - 1) + "||",
-                )
+        epoch_training_loss, epoch_validation_loss = one_epoch(
+            model,
+            criterion,
+            optimizer,
+            dataloaders,
+            device,
+            epoch=epoch,
+            writer=writer,
+            scheduler=scheduler,
+        )
+        training_loss_str = "{:.6f}".format(epoch_training_loss)
+        validation_loss_str = "{:.6f}".format(epoch_validation_loss)
+        num_space = 41 - len(training_loss_str)
+        print(
+            "||" + " " * (num_space // 2 - 1),
+            "Training epoch loss: " + training_loss_str,
+            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+        )
+
+        # Reduce LR on plateau should be called once per epoch.
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(epoch_training_loss)
+        if epoch_validation_loss < best_loss:
+            best_loss = epoch_validation_loss
+            validation_loss_str += " *"
+            if state_dict_path is not None:
+                torch.save(model.state_dict(), state_dict_path)
+        num_space = 39 - len(validation_loss_str)
+        print(
+            "||" + " " * (num_space // 2 - 1),
+            "Validation epoch loss: " + validation_loss_str,
+            " " * (num_space // 2 + (num_space % 2) - 1) + "||",
+        )
 
         current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
         num_space = 36 - len(current_lr_str)
@@ -943,8 +945,8 @@ if __name__ == "__main__":
     training_data_path = "./tex-ray/training_set"
     validation_data_path = "./tex-ray/validation_set"
     testing_data_path = "./tex-ray/testing_set"
-    state_dict_path = "./tex-ray/state_dict.pt"
-    inferenece_input_path = "./tex-ray/reconstructions/reconstruction.tiff"
+    state_dict_path = "./tex-ray/state_dict_dl50.pt"
+    inferenece_input_path = "./tex-ray/reconstructions/BAM2x2x3UC_LFOV_AIR_40kV_10W_5s_BIN4_so80mm_od150mm.tiff"
     inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
 
     data_mean = 0.20772
@@ -954,17 +956,17 @@ if __name__ == "__main__":
     train = True
     normalize = True
     shuffle = True
-    batch_size = 8
-    num_epochs = 100
-    learn_rate = 0.0001
-    weight_decay = 0.0016
-    momentum = 0.9
+    batch_size = 4
+    num_epochs = 10
+    learn_rate = 0.001
+    weight_decay = 0.00001
+    momentum = 0.99
     num_workers = 4
     rng_seed = 0
 
     generator = seed_all(rng_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = build_model()
+    model = build_model(model="fcn_resnet50")
     model = model.to(device)
     writer = SummaryWriter(flush_secs=1)
 
@@ -994,10 +996,9 @@ if __name__ == "__main__":
             weight_decay=weight_decay,
             momentum=momentum,
         )
-        scheduler = optim.lr_scheduler.PolynomialLR(
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            total_iters=num_epochs * len(training_set) // batch_size,
-            power=0.9,
+            len(training_set) // batch_size,
         )
 
         train_model(
