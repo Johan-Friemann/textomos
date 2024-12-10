@@ -1,2 +1,3 @@
 *.tif
 *.tiff
+!real_layer2layer_sample_reconstruction.tiff
