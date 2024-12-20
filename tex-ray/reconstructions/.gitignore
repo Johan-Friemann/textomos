@@ -1,4 +1,2 @@
 *.tif
 *.tiff
-!real_layer2layer_sample_reconstruction.tiff
-!real_orthogonal_noobed_sample_reconstruction.tiff
