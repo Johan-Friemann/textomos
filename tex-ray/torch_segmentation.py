@@ -214,6 +214,8 @@ class TIFFDataset(Dataset):
         tiff_path (str): The absolute path to the tiff-file.
 
     Keyword params:
+        ground_truth_path (str): The path to ground truth data if available.
+
         slice_axis (str): The axis along which to take slices.
 
         z_score (tuple(float, float)): Mean and standard deviation to use for
@@ -231,6 +233,7 @@ class TIFFDataset(Dataset):
     def __init__(
         self,
         tiff_path,
+        ground_truth_path=None,
         slice_axis="x",
         z_score=(None, None),
         cutoff=(-1.0, 1.0),
@@ -251,6 +254,17 @@ class TIFFDataset(Dataset):
         elif slice_axis != "z":
             raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
 
+        self.segmentation = None
+        if not ground_truth_path is None:
+            self.segmentation = torch.tensor(tifffile.imread(ground_truth_path))
+            if slice_axis == "x":
+                self.segmentation = torch.transpose(self.segmentation, 0, 2)
+                self.segmentation = torch.transpose(self.segmentation, 1, 2)
+            elif slice_axis == "y":
+                self.segmentation = torch.transpose(self.segmentation, 0, 1)
+            elif slice_axis != "z":
+                raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
     def __len__(self):
         return self.reconstruction.shape[0]
 
@@ -270,14 +284,21 @@ class TIFFDataset(Dataset):
         if (not self.mean is None) and (not self.std is None):
             recon_slice = (recon_slice - self.mean) / self.std
 
-        return recon_slice
+        seg_mask = []
+        if not self.segmentation is None:
+            seg_slice = self.segmentation[idx].unsqueeze(0)
+            seg_mask = torch.zeros((4, 512, 512))
+            for i in range(4):
+                seg_mask[i] = seg_slice == i
+
+        return recon_slice, seg_mask
 
 
 class JaccardLoss(nn.Module):
     """See pytorch module documentation for specifics of forward type method
        that is required by the nn.Module interface.
 
-    Compute the Jaccard Loss (intersection over union).
+    Compute the soft Jaccard Loss (intersection over union).
 
     Params:
         -
@@ -291,10 +312,34 @@ class JaccardLoss(nn.Module):
 
     def forward(self, inputs, targets):
         inputs = torch.softmax(inputs, 1)
-        intersection = torch.sum(inputs * targets, (2, 3))
-        union = torch.sum(inputs + targets, (2, 3)) - intersection
-        jaccard_loss = 1 - torch.mean(intersection / union, 1)
+        intersection = torch.sum(inputs * targets, (1, 2, 3))
+        union = torch.sum(inputs + targets, (1, 2, 3)) - intersection
+        jaccard_loss = 1 - intersection / union
         return torch.mean(jaccard_loss)
+
+
+class PixelLoss(nn.Module):
+    """See pytorch module documentation for specifics of forward type method
+       that is required by the nn.Module interface.
+
+    Compute the soft pixel wise Loss.
+
+    Params:
+        -
+
+    Keyword params:
+        -
+    """
+
+    def __init__(self):
+        super(PixelLoss, self).__init__()
+
+    def forward(self, inputs, targets):
+        inputs = torch.softmax(inputs, 1)
+        pixel_loss = 1 - torch.sum(inputs * targets, (1, 2, 3)) / (
+            inputs.shape[2] * inputs.shape[3]
+        )
+        return torch.mean(pixel_loss)
 
 
 def seed_all(rng_seed):
@@ -876,6 +921,8 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
     segmented_volume = segmented_volume.to(device)
     iterator = iter(dataloader)
     for slice_idx, input in enumerate(iterator):
+        if type(input) is list:  # Handle TIFFDataset vs TexRayDataset.
+            input = input[0]
         input = input.to(device)
         prediction = model(input)["out"].argmax(1)
         segmented_volume[slice_idx] = prediction
@@ -945,8 +992,10 @@ if __name__ == "__main__":
     training_data_path = "./tex-ray/training_set"
     validation_data_path = "./tex-ray/validation_set"
     testing_data_path = "./tex-ray/testing_set"
-    state_dict_path = "./tex-ray/state_dict_dl50.pt"
-    inferenece_input_path = "./tex-ray/reconstructions/BAM2x2x3UC_LFOV_AIR_40kV_10W_5s_BIN4_so80mm_od150mm.tiff"
+    state_dict_path = "./tex-ray/state_dict_fcn50.pt"
+    inferenece_input_path = (
+        "./tex-ray/reconstructions/real_layer2layer_sample_reconstruction.tiff"
+    )
     inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
 
     data_mean = 0.20772
@@ -996,7 +1045,7 @@ if __name__ == "__main__":
             weight_decay=weight_decay,
             momentum=momentum,
         )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
             len(training_set) // batch_size,
         )
