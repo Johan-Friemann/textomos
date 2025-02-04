@@ -1,0 +1,28 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Textomos
+message: >-
+  Automated generation of synthetic tomograms of woven
+  composite materials. 
+type: software
+authors:
+  - given-names: Johan
+    family-names: Friemann
+    email: johan.friemann@chalmers.se
+    affiliation: Chalmers University of Technology
+    orcid: 'https://orcid.org/0000-0002-5697-7916'
+repository-code: 'https://github.com/Johan-Friemann/textomos'
+abstract: >-
+  Automated generation of synthetic labeled tomograms of
+  woven composite materials. The pipeline is primarily based
+  on TexGen and gVirtualXray. The name TexTomoS is a
+  portmanteau of Textile, Tomography, and Segmentation.
+keywords:
+  - Computed Tomography
+  - Segmentation
+  - 3D-textile
+  - Carbon Fiber Reinforced Composites
+  - Simulation
+license: BSD-3-Clause
