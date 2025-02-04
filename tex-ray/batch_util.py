@@ -31,9 +31,7 @@ if __name__ == "__main__":
     sinograms = generate_sinograms(config_dict)
 
     sinograms = generate_sinograms(config_dict)
-    reconstruction = perform_tomographic_reconstruction(
-        sinograms, config_dict
-    )
+    reconstruction = perform_tomographic_reconstruction(sinograms, config_dict)
     tifffile.imwrite(
         config_dict["reconstruction_output_path"],
         reconstruction,
@@ -47,12 +45,10 @@ if __name__ == "__main__":
     )
     del segmentation
 
-    save_data(
-        database_path, config_dict, chunk_size=chunk_size
-    )
+    save_data(database_path, config_dict, chunk_size=chunk_size)
 
     num_datapoints = get_database_shape(database_path)[0]
 
     if num_datapoints == generate_until:
-        with open('/textomos/input/finished', 'wb') as f:
+        with open("/textomos/input/finished", "wb") as f:
             f.write("FINISHED")

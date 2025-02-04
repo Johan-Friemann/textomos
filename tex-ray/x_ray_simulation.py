@@ -980,7 +980,7 @@ def generate_sinograms(config_dict):
         xray_config_dict["sample_rotation_direction"],
         display=xray_config_dict["display"],
         photonic_noise=xray_config_dict["photonic_noise"],
-        point_spread=xray_config_dict["point_spread"]
+        point_spread=xray_config_dict["point_spread"],
     )
     # After finishing the tomographic constructions it is safe to close window.
     gvxr.destroyWindow()

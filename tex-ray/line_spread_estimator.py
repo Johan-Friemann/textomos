@@ -32,7 +32,7 @@ def bin_line(x, binning_number):
 
 
 if __name__ == "__main__":
-    edge_test_path = "./textomos/edge_spread.csv" # format: pixel, %intensity
+    edge_test_path = "./textomos/edge_spread.csv"  # format: pixel, %intensity
     sign_conv = -1  # Depends on what side is bright
     guess_experiment = [53.5, 4.0]
     L = 100  # Reasonable domain size

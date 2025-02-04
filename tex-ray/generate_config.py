@@ -543,7 +543,7 @@ def generate_config(
     config_path,
     parameters={},
 ):
-    """Generate a valid Tex-Ray config associated with a sim-id and write to
+    """Generate a valid Textomos config associated with a sim-id and write to
        file.
 
     Args:

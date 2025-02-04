@@ -615,6 +615,7 @@ def generate_woven_composite_sample(config_dict):
     )
     return None
 
+
 if __name__ == "__main__":
     config_path = sys.argv[1]
     with open(config_path) as f:

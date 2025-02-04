@@ -28,7 +28,7 @@ def save_mesh_to_hdf5(
 
         local_idx (int): The local index of the data inside the chunk.
 
-        config_dict (dict): A dictionary of Tex-Ray options pertaining the
+        config_dict (dict): A dictionary of Textomos options pertaining the
                             simulation that is about to be saved.
 
     Keyword args:
@@ -68,7 +68,7 @@ def save_reconstruction_to_hdf5(
 
         local_idx (int): The local index of the data inside the chunk.
 
-        config_dict (dict): A dictionary of Tex-Ray options pertaining the
+        config_dict (dict): A dictionary of Textomos options pertaining the
                             simulation that is about to be saved.
 
     Keyword args:
@@ -104,7 +104,7 @@ def save_segmentation_to_hdf5(
 
         local_idx (int): The local index of the data inside the chunk.
 
-        config_dict (dict): A dictionary of Tex-Ray options pertaining the
+        config_dict (dict): A dictionary of Textomos options pertaining the
                             simulation that is about to be saved.
 
     Keyword args:
@@ -156,7 +156,7 @@ def save_data(
         database_path (str): The absolute path to the database folder. If it
                               doesn't exist it is created (create new database).
 
-        config_dict (dict): A dictionary of Tex-Ray options pertaining the
+        config_dict (dict): A dictionary of Textomos options pertaining the
                             simulation that is about to be saved.
 
     Keyword args:
@@ -453,7 +453,7 @@ def get_meshes_from_database(database_path, global_idx):
         -
 
     Returns:
-        
+
         vertex_coords (list(np array[float])): Vertex coords for each
                                                phase.
 

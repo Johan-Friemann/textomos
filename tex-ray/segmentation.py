@@ -268,13 +268,13 @@ def segment_reconstruction(config_dict):
                 vox,
             ),
         )
-    vox = (vox & -vox) # Get least significant bit: remove outer overwrite.
+    vox = vox & -vox  # Get least significant bit: remove outer overwrite.
     out = cp.zeros_like(vox)
-    
+
     # Find position of most significant bit: from powers of 2 to 0, 1, 2, 3, ...
-    while cp.size(cp.nonzero(vox)[0]) :
+    while cp.size(cp.nonzero(vox)[0]):
         out[cp.nonzero(vox)[0]] += 1
         vox >>= 1
-        
+
     out = out.reshape(num_voxels, num_voxels, num_voxels)
     return out.get().astype(np.uint8)
