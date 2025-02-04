@@ -9,10 +9,10 @@ without using a container, but this requires the installation of several
 dependencies manually. This is not recommended and is not documented. 
 
 ## Installation
-Clone the repo navigate to the repository root directory and run
+Clone the repo, navigate to the repository root directory, and run
 ```docker compose up```.
-This will pull the required docker base image, install or build all
-dependencies. When the container is finished building an X-terminal will be
+This will pull the required docker base image and install or build all
+dependencies. When the container is finished building, an X-terminal will be
 launched.
 
 ## Basic usage
