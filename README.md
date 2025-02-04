@@ -1,6 +1,7 @@
 # textomos
 Automated generation of synthetic labeled tomograms of woven composite
 materials. The pipeline is primarily based on TexGen and gVirtualXray.
+The name TexTomoS is a portmanteau of Textile, Tomography, and Segmentation.
 
 ## Requirements
 This software requires an NVidia GPU, Docker, and the NVidia container toolkit
