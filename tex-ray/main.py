@@ -10,7 +10,7 @@ from zeiss_xradia_410_versa import read_txrm_scan_data, read_txm_scan_data
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        input_path="./tex-ray/input/default_input.json"
+        input_path="./textomos/input/default_input.json"
     else:
         input_path = sys.argv[1]
     with open(input_path) as f:

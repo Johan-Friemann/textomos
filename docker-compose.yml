@@ -1,12 +1,12 @@
 services:
-  tex-ray:
-    image: tex-ray
-    container_name: tex-ray
+  textomos:
+    image: textomos
+    container_name: textomos
     build: .
     volumes:
       - type: bind
-        source: ./tex-ray
-        target: /tex-ray
+        source: ./textomos
+        target: /textomos
         read_only: false
       - type: bind
         source: /tmp/.X11-unix

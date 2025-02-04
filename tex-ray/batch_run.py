@@ -16,10 +16,10 @@ This construction is necessary due to strange behavior when running gvxr many
 times within the same python program. In order to get a clean simulator the 
 gvxr singleton needs to  be created from scratch. This could be achieved through
 launching a new process withing a python script. However, if new processes
-that executes the entire tex-ray pipeline are launched multiple times within a
+that executes the entire textomos pipeline are launched multiple times within a
 script, a memory leak appears. We therefore launch the script from bash instead.
 
-The memory leak could be a bug in gvxr or an issue with tex-ray...
+The memory leak could be a bug in gvxr or an issue with textomos...
 """
 
 if __name__ == "__main__":
@@ -50,5 +50,5 @@ if __name__ == "__main__":
 
     # Strict equality here: if previous check didn't trigger <= will hold now.
     if get_database_shape(database_path)[0] == generate_until:
-        with open("/tex-ray/input/finished", "w") as f:
+        with open("/textomos/input/finished", "w") as f:
             f.write("FINISHED")

@@ -180,7 +180,7 @@ def segment_reconstruction(config_dict):
                                             labels in the form of voxel values.
 
     """
-    with open("./tex-ray/voxelizationKernel.cu", "r") as f:
+    with open("./textomos/voxelizationKernel.cu", "r") as f:
         kernel_as_string = f.read()
     vox_kernel = cp.RawKernel(kernel_as_string, "vox_kernel")
 

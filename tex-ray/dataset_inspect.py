@@ -81,7 +81,7 @@ def plot_slice(
 
 
 if __name__ == "__main__":
-    database_path = "./tex-ray/training_set"
+    database_path = "./textomos/training_set"
     lims = (0, 3)
     slice = hdf5_utils.get_reconstruction_from_database(database_path, 100)[
         :, :, 236
@@ -93,5 +93,5 @@ if __name__ == "__main__":
         0.48,
         "$yz$",
         "g",
-        "./tex-ray/sim_yz_slice.pdf",
+        "./textomos/sim_yz_slice.pdf",
     )

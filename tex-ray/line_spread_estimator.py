@@ -32,7 +32,7 @@ def bin_line(x, binning_number):
 
 
 if __name__ == "__main__":
-    edge_test_path = "./tex-ray/edge_spread.csv" # format: pixel, %intensity
+    edge_test_path = "./textomos/edge_spread.csv" # format: pixel, %intensity
     sign_conv = -1  # Depends on what side is bright
     guess_experiment = [53.5, 4.0]
     L = 100  # Reasonable domain size
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     plt.ylabel("Normalized intensity (arb)")
     plt.title("Estimate of line spread function", fontsize=11)
     plt.legend()
-    plt.savefig("./tex-ray/line_spread.pdf")
+    plt.savefig("./textomos/line_spread.pdf")
     plt.show()
 
     x_kernel = np.arange(-l, l + 1)
