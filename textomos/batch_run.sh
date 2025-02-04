@@ -22,7 +22,7 @@ done
 
 
 if [ -z $base_batch_input ]; then
-    base_batch_input=/tex-ray/input/base_batch_input.json
+    base_batch_input=/textomos/input/base_batch_input.json
 fi
 if [ -z $num_process ]; then
     num_process=10
@@ -59,13 +59,13 @@ function clean_up {
 
     for i in $(seq 0 $(($num_process-1)));
     do
-        rm -f /tex-ray/input/input_$i.json
-        rm -f /tex-ray/meshes/weft_$i.stl
-        rm -f /tex-ray/meshes/warp_$i.stl
-        rm -f /tex-ray/meshes/matrix_$i.stl
-        rm -f /tex-ray/reconstructions/reconstruction_$i.tiff
-        rm -f /tex-ray/segmentations/segmentation_$i.tiff
-        rm -f /tex-ray/input/finished
+        rm -f /textomos/input/input_$i.json
+        rm -f /textomos/meshes/weft_$i.stl
+        rm -f /textomos/meshes/warp_$i.stl
+        rm -f /textomos/meshes/matrix_$i.stl
+        rm -f /textomos/reconstructions/reconstruction_$i.tiff
+        rm -f /textomos/segmentations/segmentation_$i.tiff
+        rm -f /textomos/input/finished
     done
     printf "\n"
     exit
@@ -81,7 +81,7 @@ while : ; do
     config_pids=()
     for i in $(seq 0 $(($num_process-1)));
     do
-        python3 /tex-ray/generate_config.py $i /tex-ray/input/ $base_batch_input $database_path $generate_until >/dev/null 2>&1 &
+        python3 /textomos/generate_config.py $i /textomos/input/ $base_batch_input $database_path $generate_until >/dev/null 2>&1 &
         config_pids+=($!)
     done
     for pid in ${config_pids[*]}; do
@@ -93,12 +93,12 @@ while : ; do
         fi 
     done
     config_pids=() # Clear it so we don't try to kill dead processes.
-    if [ -f /tex-ray/input/finished ]; then
+    if [ -f /textomos/input/finished ]; then
         printf "Database size already at or above target size: $generate_until; Terminating!\n"
         for i in $(seq 0 $(($num_process-1)));
         do
-            rm -f /tex-ray/input/input_$i.json
-            rm -f /tex-ray/input/finished
+            rm -f /textomos/input/input_$i.json
+            rm -f /textomos/input/finished
         done
         break
     fi
@@ -107,7 +107,7 @@ while : ; do
     tex_pids=()
     for i in $(seq 0 $(($num_process-1)));
     do
-        python3 /tex-ray/textile_generation.py /tex-ray/input/input_$i.json  & 
+        python3 /textomos/textile_generation.py /textomos/input/input_$i.json  & 
         tex_pids+=($!)
     done
     rets=()
@@ -130,7 +130,7 @@ while : ; do
 
     for i in $(seq 0 $(($num_process-1))); do
         if [[ "${rets[$i]}" -eq 0 ]]; then
-            python3 /tex-ray/batch_run.py /tex-ray/input/input_$i.json $database_path $chunk_size $generate_until >/dev/null 2>&1 & 
+            python3 /textomos/batch_run.py /textomos/input/input_$i.json $database_path $chunk_size $generate_until >/dev/null 2>&1 & 
             main_pid=$!
             wait $main_pid
             main_ret=$?
@@ -138,25 +138,25 @@ while : ; do
                 printf "Encountered critical issue in X-Ray simulation (Check base config)!\n"
                 clean_up
             fi 
-            if [ -f /tex-ray/input/finished ]; then
+            if [ -f /textomos/input/finished ]; then
                 break
             fi
         fi   
     done
     for i in $(seq 0 $(($num_process-1)));
     do
-        rm -f /tex-ray/input/input_$i.json
-        rm -f /tex-ray/meshes/weft_$i.stl
-        rm -f /tex-ray/meshes/warp_$i.stl
-        rm -f /tex-ray/meshes/matrix_$i.stl
-        rm -f /tex-ray/reconstructions/reconstruction_$i.tiff
-        rm -f /tex-ray/segmentations/segmentation_$i.tiff
+        rm -f /textomos/input/input_$i.json
+        rm -f /textomos/meshes/weft_$i.stl
+        rm -f /textomos/meshes/warp_$i.stl
+        rm -f /textomos/meshes/matrix_$i.stl
+        rm -f /textomos/reconstructions/reconstruction_$i.tiff
+        rm -f /textomos/segmentations/segmentation_$i.tiff
     done
-    if [ ! -f /tex-ray/input/finished ]; then
+    if [ ! -f /textomos/input/finished ]; then
         printf "    Finished processing $success samples.\n\n"
     else
         printf "Reached target database size: $generate_until; Terminating!\n"
-        rm -f /tex-ray/input/finished
+        rm -f /textomos/input/finished
         break
     fi
 done

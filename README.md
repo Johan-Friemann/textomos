@@ -1,6 +1,7 @@
-# tex-ray
+# textomos
 Automated generation of synthetic labeled tomograms of woven composite
 materials. The pipeline is primarily based on TexGen and gVirtualXray.
+The name TexTomoS is a portmanteau of Textile, Tomography, and Segmentation.
 
 ## Requirements
 This software requires an NVidia GPU, Docker, and the NVidia container toolkit
@@ -17,16 +18,16 @@ launched.
 
 ## Basic usage
 To test the entire data generation pipeline: inside the X-terminal execute
-```python3 ./tex-ray/main.py```. Note that the textile generation step takes a
+```python3 ./textomos/main.py```. Note that the textile generation step takes a
 while. For a custom simulation create an input json file inside
-```/tex-ray inputs``` that for example is called
+```/textomos inputs``` that for example is called
 ```my_input.json``` and run 
-```python3 ./tex-ray/main.py ./tex-ray/inputs/my_input.json```.
+```python3 ./textomos/main.py ./textomos/inputs/my_input.json```.
 
 ## Batch run
 If you want to create a large dataset you can use the batch run 
 shell script. Inside the X-terminal run 
-```bash ./tex-ray/batch_run.sh [PATH] [NUM] -b [BATCH] -p [NUM_PROC] -s [CHUNK]```.
+```bash ./textomos/batch_run.sh [PATH] [NUM] -b [BATCH] -p [NUM_PROC] -s [CHUNK]```.
 ```[PATH]``` is the path to a directory where you want the data to be saved to,
 and ```[NUM]``` is the requested number of data points. ```[BATCH]``` is the
 path to the base configuarations, ```[NUM_PROC]``` is the number of parallel

@@ -7,8 +7,8 @@ from yarn_attenuation_util import *
 from hdf5_utils import get_database_shape
 
 """
-This files contains routines for generating tex-ray config files from a base
-config. A base config file contains all possible tex-ray options and
+This files contains routines for generating textomos config files from a base
+config. A base config file contains all possible textomos options and
 corresponding values. Values that can be domain randomized are given as upper
 and lower bounds. These values will be uniformly sampled within these limits.
 """
@@ -543,7 +543,7 @@ def generate_config(
     config_path,
     parameters={},
 ):
-    """Generate a valid Tex-Ray config associated with a sim-id and write to
+    """Generate a valid Textomos config associated with a sim-id and write to
        file.
 
     Args:
@@ -607,7 +607,7 @@ if __name__ == "__main__":
     # If the database exists and is already at or above final size; terminate.
     if os.path.isdir(database_path):
         if get_database_shape(database_path)[0] >= generate_until:
-            with open("/tex-ray/input/finished", "w") as f:
+            with open("/textomos/input/finished", "w") as f:
                 f.write("FINISHED")
             sys.exit(0)
 

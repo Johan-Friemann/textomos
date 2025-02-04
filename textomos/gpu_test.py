@@ -10,11 +10,13 @@ if torch.cuda.is_available():
 else:
     print("GPU is not available.")
     device = torch.device("cpu")
-    
+
 x = torch.randn(52000, 52000).to(device)
 
-print("Loaded big array into VRAM; sleeping for 10 sec,",
-      "please check nvidia-settings to see utilization!")
+print(
+    "Loaded big array into VRAM; sleeping for 10 sec,",
+    "please check nvidia-settings to see utilization!",
+)
 time.sleep(10)
 
 print("Finished!")

@@ -1,11 +1,11 @@
 {
     "mesh_paths": [
-        "./tex-ray/meshes/weft.stl",
-        "./tex-ray/meshes/warp.stl",
-        "./tex-ray/meshes/matrix.stl"
+        "./textomos/meshes/weft.stl",
+        "./textomos/meshes/warp.stl",
+        "./textomos/meshes/matrix.stl"
     ],
-    "reconstruction_output_path": "./tex-ray/reconstructions/reconstruction.tiff",
-    "segmentation_output_path": "./tex-ray/segmentations/segmentation.tiff",
+    "reconstruction_output_path": "./textomos/reconstructions/reconstruction.tiff",
+    "segmentation_output_path": "./textomos/segmentations/segmentation.tiff",
 
 
     "weave_type": "layer2layer",

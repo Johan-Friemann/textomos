@@ -573,7 +573,7 @@ def draw_image_with_masks(
     alpha=0.2,
     save=False,
     show=True,
-    save_path="./tex-ray/segmented_image.jpg",
+    save_path="./textomos/segmented_image.jpg",
 ):
     """Draw the input image in grayscale and overlay the predicted segmentation
     as a colored mask. Red refers to air, blue refers to matrix, green refers to
@@ -989,14 +989,14 @@ if __name__ == "__main__":
     # mean: 0.20771875977516174
     # std: 0.25910180825541423
     # balancing weights: [0.1242, 1.0038, 1.0000, 0.6890]
-    training_data_path = "./tex-ray/training_set"
-    validation_data_path = "./tex-ray/validation_set"
-    testing_data_path = "./tex-ray/testing_set"
-    state_dict_path = "./tex-ray/state_dict_fcn50.pt"
+    training_data_path = "./textomos/training_set"
+    validation_data_path = "./textomos/validation_set"
+    testing_data_path = "./textomos/testing_set"
+    state_dict_path = "./textomos/state_dict_fcn50.pt"
     inferenece_input_path = (
-        "./tex-ray/reconstructions/real_layer2layer_sample_reconstruction.tiff"
+        "./textomos/reconstructions/real_layer2layer_sample_reconstruction.tiff"
     )
-    inferenece_output_path = "./tex-ray/ml_segmentation.tiff"
+    inferenece_output_path = "./textomos/ml_segmentation.tiff"
 
     data_mean = 0.20772
     data_std = 0.25910
