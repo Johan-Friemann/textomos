@@ -90,7 +90,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
     return triangles
 
 
-def generate_warp_mesh(start_coord, cell_shape, num_nodes, points_per_node):
+def generate_warp_yarn(start_coord, cell_shape, num_nodes, points_per_node):
     param_a = 2
     param_b = 1
 
