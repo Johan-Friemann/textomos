@@ -27,6 +27,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
         axis=1,
     )
 
+    # Odd number of number of points make one more "bottom heavy" triangle.
     if points_per_node % 2 != 0:
         cap_idx_1 = np.arange(0, (points_per_node - 2) // 2 + 1)
         cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
@@ -89,7 +90,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
     return triangles
 
 
-def generate_warp_topology(start_coord, cell_shape, num_nodes, points_per_node):
+def generate_warp_mesh(start_coord, cell_shape, num_nodes, points_per_node):
     param_a = 2
     param_b = 1
 
