@@ -27,7 +27,7 @@ while. For a custom simulation create an input json file inside
 ## Batch run
 If you want to create a large dataset you can use the batch run 
 shell script. Inside the X-terminal run 
-```bash ./textomos/batch_run.sh [PATH] [NUM] -b [BATCH] -p [NUM_PROC] -s [CHUNK]```.
+```bash ./textomos/batch_run.sh -b [BATCH] -p [NUM_PROC] -s [CHUNK] [PATH] [NUM]```.
 ```[PATH]``` is the path to a directory where you want the data to be saved to,
 and ```[NUM]``` is the requested number of data points. ```[BATCH]``` is the
 path to the base configuarations, ```[NUM_PROC]``` is the number of parallel
