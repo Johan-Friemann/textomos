@@ -111,6 +111,6 @@ def generate_warp_yarn(start_coord, cell_shape, num_nodes, points_per_node):
 
 
 # Curve params
-p, t = generate_warp_topology([0.0, 0.0, 0.0], [30, 10, 10], 20, 20)
+p, t = generate_warp_yarn([0.0, 0.0, 0.0], [30, 10, 10], 20, 20)
 mesh = me.Mesh(p, [("triangle", t)])
 mesh.write("./textomos/foo.stl")
