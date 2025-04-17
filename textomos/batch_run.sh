@@ -1,5 +1,14 @@
 #!/bin/bash
 
+while getopts 'b:p:s:' flag; do
+    case "${flag}" in
+        b) base_batch_input="${OPTARG}" ;;
+        p) num_process="${OPTARG}" ;;
+        s) chunk_size="${OPTARG}" ;;
+       \?) echo "Unknown option -${OPTARG}"; exit;;
+    esac
+done
+shift $(( OPTIND - 1 ))
 
 database_path=$1
 if [ -z $database_path ]; then
@@ -11,15 +20,6 @@ if [ -z $generate_until ]; then
     printf "No database size requested; Terminating!\n"
     exit
 fi
-
-while getopts 'b:p:s:' flag; do
-    case "${flag}" in
-        b) base_batch_input="${OPTARG}" ;;
-        p) num_process="${OPTARG}" ;;
-        s) chunk_size="${OPTARG}" ;;
-    esac
-done
-
 
 if [ -z $base_batch_input ]; then
     base_batch_input=/textomos/input/base_batch_input.json
