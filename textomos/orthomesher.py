@@ -35,7 +35,6 @@ def generate_yarn_topology(num_nodes, points_per_node):
         cap_idx_1 = np.arange(0, (points_per_node - 2) // 2)
         cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
 
-    start_cap = np.empty((points_per_node - 2, 3), dtype=start_cap_1.dtype)
     start_cap_1 = np.stack(
         (cap_idx_1, points_per_node - 1 - cap_idx_1, cap_idx_1 + 1), axis=1
     )
@@ -47,6 +46,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
         ),
         axis=1,
     )
+    start_cap = np.empty((points_per_node - 2, 3), dtype=start_cap_1.dtype)
     start_cap[0::2] = start_cap_1
     start_cap[1::2] = start_cap_2
 
