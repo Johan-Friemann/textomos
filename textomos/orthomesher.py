@@ -70,6 +70,41 @@ def generate_yarn_topology(num_nodes, points_per_node):
     return triangles
 
 
+def get_indices(node_range, point_range, points_per_node):
+    zone_width = point_range[1] - point_range[0]
+    idx = np.tile(
+        np.arange(point_range[0], point_range[1]),
+        node_range[1] - node_range[0] + 1,
+    ) + np.repeat(
+        np.arange(node_range[0], node_range[1] + 1) * points_per_node,
+        zone_width,
+    )
+    # We treat the last point on a section differently.
+    shifted_idx = idx[zone_width - 1 :: zone_width] + (
+        -(points_per_node - 1) if point_range[1] == points_per_node else 1
+    )
+    point_idx = np.ravel(
+        np.hstack(
+            (
+                np.reshape(idx, (-1, zone_width)),
+                np.reshape(shifted_idx, (-1, 1)),
+            ),
+        ),
+        order="C",
+    )
+    triangle_idx = np.ravel(
+        np.stack(
+            (
+                2 * idx[:-zone_width],
+                2 * idx[:-zone_width] + 1,
+            )
+        ),
+        order="F",
+    )
+
+    return point_idx, triangle_idx
+
+
 def generate_warp_yarn(start_coord, cell_shape, num_nodes, points_per_node):
     param_a = 2
     param_b = 1
