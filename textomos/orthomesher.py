@@ -28,12 +28,10 @@ def generate_yarn_topology(num_nodes, points_per_node):
     )
 
     # Odd number of number of points make one more "bottom heavy" triangle.
-    if points_per_node % 2 != 0:
-        cap_idx_1 = np.arange(0, (points_per_node - 2) // 2 + 1)
-        cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
-    else:
-        cap_idx_1 = np.arange(0, (points_per_node - 2) // 2)
-        cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
+    cap_idx_1 = np.arange(
+        0, (points_per_node - 2) // 2 + 1 * (points_per_node % 2 != 0)
+    )
+    cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
 
     start_cap_1 = np.stack(
         (cap_idx_1, points_per_node - 1 - cap_idx_1, cap_idx_1 + 1), axis=1
@@ -54,7 +52,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
     end_cap_1 = np.stack(
         (
             points_per_node * (num_nodes - 1) + cap_idx_1,
-            points_per_node * (num_nodes - 1)  +  cap_idx_1 + 1,
+            points_per_node * (num_nodes - 1) + cap_idx_1 + 1,
             points_per_node * num_nodes - cap_idx_1 - 1,
         ),
         axis=1,
