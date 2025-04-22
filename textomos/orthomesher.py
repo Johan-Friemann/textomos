@@ -4,27 +4,24 @@ import meshio as me
 
 def generate_yarn_topology(num_nodes, points_per_node):
     tube_idx = np.arange(0, (num_nodes - 1) * points_per_node)
-    tube_1 = np.stack(
-        (
-            tube_idx,
-            (tube_idx + 1) % points_per_node
-            + points_per_node * (tube_idx // points_per_node)
-            + points_per_node,
-            tube_idx + points_per_node,
+    tube = np.reshape(
+        np.stack(
+            (
+                tube_idx,
+                (tube_idx + 1) % points_per_node
+                + points_per_node * (tube_idx // points_per_node)
+                + points_per_node,
+                tube_idx + points_per_node,
+                tube_idx,
+                (tube_idx + 1) % points_per_node
+                + points_per_node * (tube_idx // points_per_node),
+                (tube_idx + 1) % points_per_node
+                + points_per_node * (tube_idx // points_per_node)
+                + points_per_node,
+            ),
+            axis=1,
         ),
-        axis=1,
-    )
-
-    tube_2 = np.stack(
-        (
-            tube_idx,
-            (tube_idx + 1) % points_per_node
-            + points_per_node * (tube_idx // points_per_node),
-            (tube_idx + 1) % points_per_node
-            + points_per_node * (tube_idx // points_per_node)
-            + points_per_node,
-        ),
-        axis=1,
+        (-1, 3),
     )
 
     # Odd number of number of points make one more "bottom heavy" triangle.
@@ -32,59 +29,44 @@ def generate_yarn_topology(num_nodes, points_per_node):
         0, (points_per_node - 2) // 2 + 1 * (points_per_node % 2 != 0)
     )
     cap_idx_2 = np.arange(0, (points_per_node - 2) // 2)
-
-    start_cap_1 = np.stack(
-        (cap_idx_1, points_per_node - 1 - cap_idx_1, cap_idx_1 + 1), axis=1
-    )
-    start_cap_2 = np.stack(
+    start_cap = np.vstack(
         (
-            points_per_node - 1 - cap_idx_2,
-            points_per_node - 2 - cap_idx_2,
-            cap_idx_2 + 1,
+            np.stack(
+                (cap_idx_1, points_per_node - 1 - cap_idx_1, cap_idx_1 + 1),
+                axis=1,
+            ),
+            np.stack(
+                (
+                    points_per_node - 1 - cap_idx_2,
+                    points_per_node - 2 - cap_idx_2,
+                    cap_idx_2 + 1,
+                ),
+                axis=1,
+            ),
         ),
-        axis=1,
     )
-    start_cap = np.empty((points_per_node - 2, 3), dtype=start_cap_1.dtype)
-    start_cap[0::2] = start_cap_1
-    start_cap[1::2] = start_cap_2
-
-    end_cap = np.empty((points_per_node - 2, 3), dtype=start_cap_1.dtype)
-    end_cap_1 = np.stack(
+    end_cap = np.vstack(
         (
-            points_per_node * (num_nodes - 1) + cap_idx_1,
-            points_per_node * (num_nodes - 1) + cap_idx_1 + 1,
-            points_per_node * num_nodes - cap_idx_1 - 1,
+            np.stack(
+                (
+                    points_per_node * (num_nodes - 1) + cap_idx_1,
+                    points_per_node * (num_nodes - 1) + cap_idx_1 + 1,
+                    points_per_node * num_nodes - cap_idx_1 - 1,
+                ),
+                axis=1,
+            ),
+            np.stack(
+                (
+                    points_per_node * num_nodes - 1 - cap_idx_2,
+                    points_per_node * (num_nodes - 1) + cap_idx_2 + 1,
+                    points_per_node * num_nodes - 2 - cap_idx_2,
+                ),
+                axis=1,
+            ),
         ),
-        axis=1,
     )
-    end_cap_2 = np.stack(
-        (
-            points_per_node * num_nodes - 1 - cap_idx_2,
-            points_per_node * (num_nodes - 1) + cap_idx_2 + 1,
-            points_per_node * num_nodes - 2 - cap_idx_2,
-        ),
-        axis=1,
-    )
-    end_cap[0::2] = end_cap_1
-    end_cap[1::2] = end_cap_2
 
-    triangles = np.empty(
-        (
-            tube_1.shape[0]
-            + tube_2.shape[0]
-            + start_cap.shape[0]
-            + end_cap.shape[0],
-            3,
-        ),
-        dtype=tube_1.dtype,
-    )
-    triangles[0 : -(start_cap.shape[0] + end_cap.shape[0]) : 2] = tube_1
-    triangles[1 : -(start_cap.shape[0] + end_cap.shape[0]) : 2] = tube_2
-    triangles[-(start_cap.shape[0] + end_cap.shape[0]) : -end_cap.shape[0]] = (
-        start_cap
-    )
-    triangles[-end_cap.shape[0] :] = end_cap
-
+    triangles = np.vstack((tube, start_cap, end_cap))
     return triangles
 
 
