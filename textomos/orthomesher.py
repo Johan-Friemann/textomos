@@ -70,7 +70,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
     return triangles
 
 
-def get_indices(node_range, point_range, points_per_node):
+def get_contact_points(node_range, point_range, points_per_node):
     zone_width = point_range[1] - point_range[0]
     idx = np.tile(
         np.arange(point_range[0], point_range[1]),
@@ -92,33 +92,99 @@ def get_indices(node_range, point_range, points_per_node):
         ),
         order="C",
     )
-    triangle_idx = np.ravel(
-        np.stack(
-            (
-                2 * idx[:-zone_width],
-                2 * idx[:-zone_width] + 1,
-            )
-        ),
-        order="F",
+
+    return point_idx
+
+
+def compute_key_points(yarn_length, crossing_width, num_crossing):
+    spacing = yarn_length / num_crossing
+
+    keypoints = np.empty((num_crossing + 1) * 2, dtype=float)
+    keypoints[0] = 0.0
+    keypoints[-1] = yarn_length
+    keypoints[1:-1:2] = (
+        np.linspace(spacing / 2, yarn_length - spacing / 2, num_crossing)
+        - crossing_width / 2
     )
+    keypoints[2:-1:2] = (
+        np.linspace(spacing / 2, yarn_length - spacing / 2, num_crossing)
+        + crossing_width / 2
+    )
+    return keypoints
 
-    return point_idx, triangle_idx
+
+def set_contact_surface(
+    points, point_range, nodes_per_crossing, points_per_node, idx, surface
+):
+    points[
+        get_contact_points(
+            [
+                (nodes_per_crossing - 1) * (2 * idx) + (nodes_per_crossing - 1),
+                (nodes_per_crossing - 1) * (2 * idx)
+                + 2 * (nodes_per_crossing - 1),
+            ],
+            point_range,
+            points_per_node,
+        )
+    ] = surface
 
 
-def generate_warp_yarn(start_coord, cell_shape, num_nodes, points_per_node):
-    param_a = 2
-    param_b = 1
+def generate_yarn(
+    start_coord,
+    cell_shape,
+    nodes_per_crossing,
+    num_crossing,
+    crossing_width,
+    points_per_node,
+    direction=0,
+    horizontal_half_axis=2,
+    vertical_half_axis=0.2,
+    super_ellipse_power=1,
+):
 
-    angle_parameter = np.linspace(0, 2 * np.pi, points_per_node, endpoint=False)
+    keypoints = compute_key_points(cell_shape[0], crossing_width, num_crossing)
+    num_nodes = 1 + (nodes_per_crossing - 1) * (2 * num_crossing + 1)
+
+    points = np.empty((num_nodes * points_per_node, 3), dtype=float)
+    for idx in range(2 * num_crossing + 1):
+        points[
+            (
+                points_per_node
+                + points_per_node * idx * (nodes_per_crossing - 1)
+            ) : (
+                points_per_node
+                + points_per_node * (idx + 1) * (nodes_per_crossing - 1)
+            ),
+            direction,
+        ] = np.repeat(
+            np.linspace(keypoints[idx], keypoints[idx + 1], nodes_per_crossing)[
+                1:
+            ],
+            points_per_node,
+        )
+
+    # Guarantee two side points, no matter spacing
+    angle_parameter = np.concatenate(
+        (
+            np.linspace(
+                0,
+                np.pi,
+                points_per_node // 2 + points_per_node % 2,
+                endpoint=False,
+            ),
+            np.linspace(np.pi, 2 * np.pi, points_per_node // 2, endpoint=False),
+        )
+    )
     angle_parameter = np.tile(angle_parameter, num_nodes)
 
-    points = np.zeros((num_nodes * points_per_node, 3))
-    points[:, 0] = np.repeat(
-        np.linspace(start_coord[0], start_coord[0] + cell_shape[0], num_nodes),
-        points_per_node,
-    )
-    points[:, 1] = start_coord[1] + np.cos(angle_parameter) * param_a
-    points[:, 2] = start_coord[2] + np.sin(angle_parameter) * param_b
+    points[:, (direction + 1) % 2] = start_coord[0] + np.power(
+        np.abs(np.cos(angle_parameter)) * horizontal_half_axis,
+        super_ellipse_power,
+    ) * np.sign(np.cos(angle_parameter))
+    points[:, 2] = start_coord[1] + np.power(
+        np.abs(np.sin(angle_parameter)) * vertical_half_axis,
+        super_ellipse_power,
+    ) * np.sign(np.sin(angle_parameter))
 
     triangles = generate_yarn_topology(num_nodes, points_per_node)
 
@@ -126,6 +192,14 @@ def generate_warp_yarn(start_coord, cell_shape, num_nodes, points_per_node):
 
 
 # Curve params
-p, t = generate_warp_yarn([0.0, 0.0, 0.0], [30, 10, 10], 20, 20)
+p, t = generate_yarn(
+    [5.0, 0.0], [30, 10, 10], 10, 7, 3, 20, direction=0, super_ellipse_power=0.5
+)
+
+# pp = get_contact_zone([1, 3], [1, 9], 20)
+
+
+# print(pp)
+# t = np.delete(t,tt,axis=0)
 mesh = me.Mesh(p, [("triangle", t)])
 mesh.write("./textomos/foo.stl")
