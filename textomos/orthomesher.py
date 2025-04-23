@@ -133,6 +133,7 @@ def generate_yarn(
     start_coord,
     cell_shape,
     nodes_per_crossing,
+    nodes_per_non_crossing,
     num_crossing,
     crossing_width,
     points_per_node,
@@ -142,24 +143,49 @@ def generate_yarn(
     super_ellipse_power=1,
 ):
 
-    keypoints = compute_key_points(cell_shape[0], crossing_width, num_crossing)
-    num_nodes = 1 + (nodes_per_crossing - 1) * (2 * num_crossing + 1)
-
+    keypoints = compute_key_points(
+        cell_shape[direction], crossing_width, num_crossing
+    )
+    num_nodes = (
+        1
+        + nodes_per_crossing * num_crossing
+        + nodes_per_non_crossing * (num_crossing - 1)
+        + 2 * (nodes_per_non_crossing // 2)
+    )
     points = np.empty((num_nodes * points_per_node, 3), dtype=float)
+    # We must set end here since we dont include ends in linspaces.
+    points[-points_per_node:, direction] = cell_shape[direction]
+
+    nodes_per_segment = np.concatenate(
+        (
+            (0, nodes_per_non_crossing // 2),
+            np.ravel(
+                np.vstack(
+                    (
+                        np.array([nodes_per_crossing] * (num_crossing - 1)),
+                        np.array([nodes_per_non_crossing] * (num_crossing - 1)),
+                    )
+                ),
+                order="F",
+            ),
+            (nodes_per_crossing, nodes_per_non_crossing // 2),
+        )
+    )
+    crossing_idx = np.cumsum(nodes_per_segment)
+
     for idx in range(2 * num_crossing + 1):
         points[
-            (
-                points_per_node
-                + points_per_node * idx * (nodes_per_crossing - 1)
-            ) : (
-                points_per_node
-                + points_per_node * (idx + 1) * (nodes_per_crossing - 1)
+            (points_per_node * crossing_idx[idx]) : (
+                points_per_node * crossing_idx[idx + 1]
             ),
             direction,
         ] = np.repeat(
-            np.linspace(keypoints[idx], keypoints[idx + 1], nodes_per_crossing)[
-                1:
-            ],
+            np.linspace(
+                keypoints[idx],
+                keypoints[idx + 1],
+                nodes_per_segment[idx + 1],
+                endpoint=False,
+            ),
             points_per_node,
         )
 
@@ -193,7 +219,15 @@ def generate_yarn(
 
 # Curve params
 p, t = generate_yarn(
-    [5.0, 0.0], [30, 10, 10], 10, 7, 3, 20, direction=0, super_ellipse_power=0.5
+    [5.0, 0.0],
+    [30, 10, 10],
+    20,
+    3,
+    7,
+    3,
+    20,
+    direction=0,
+    super_ellipse_power=0.5,
 )
 
 # pp = get_contact_zone([1, 3], [1, 9], 20)
