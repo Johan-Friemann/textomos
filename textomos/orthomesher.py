@@ -148,47 +148,45 @@ def generate_yarn(
     )
     num_nodes = (
         1
-        + nodes_per_crossing * num_crossing
-        + nodes_per_non_crossing * (num_crossing - 1)
-        + 2 * (nodes_per_non_crossing // 2)
+        + (nodes_per_crossing - 1) * num_crossing
+        + (nodes_per_non_crossing - 1) * (num_crossing - 1)
+        + 2 * (nodes_per_non_crossing // 2 - 1)
     )
     points = np.empty((num_nodes * points_per_node, 3), dtype=float)
-    # We must set end here since we dont include ends in linspaces.
-    points[-points_per_node:, direction] = cell_shape[direction]
 
     nodes_per_segment = np.concatenate(
         (
-            (0, nodes_per_non_crossing // 2),
+            (nodes_per_non_crossing // 2 - 1,),
             np.ravel(
                 np.vstack(
                     (
-                        np.array([nodes_per_crossing] * (num_crossing - 1)),
-                        np.array([nodes_per_non_crossing] * (num_crossing - 1)),
+                        np.array([nodes_per_crossing] * (num_crossing - 1)) - 1,
+                        np.array([nodes_per_non_crossing] * (num_crossing - 1))
+                        - 1,
                     )
                 ),
                 order="F",
             ),
-            (nodes_per_crossing, nodes_per_non_crossing // 2),
+            (nodes_per_crossing - 1, nodes_per_non_crossing // 2 - 1),
         )
     )
-    crossing_idx = np.cumsum(nodes_per_segment)
+    crossing_idx = np.concatenate(((0,), np.cumsum(nodes_per_segment)))
+    nodes_per_segment += 1
 
     for idx in range(2 * num_crossing + 1):
         points[
-            (points_per_node * crossing_idx[idx]) : (
-                points_per_node * crossing_idx[idx + 1]
+            (points_per_node + points_per_node * crossing_idx[idx]) : (
+                points_per_node + points_per_node * crossing_idx[idx + 1]
             ),
             direction,
         ] = np.repeat(
             np.linspace(
                 keypoints[idx],
                 keypoints[idx + 1],
-                nodes_per_segment[idx + 1],
-                endpoint=False,
-            ),
+                nodes_per_segment[idx],
+            )[1:],
             points_per_node,
         )
-
     # Guarantee two side points, no matter spacing
     angle_parameter = np.concatenate(
         (
