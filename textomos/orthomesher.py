@@ -113,20 +113,6 @@ def compute_key_points(yarn_length, crossing_width, num_crossing):
     return keypoints
 
 
-def set_contact_surface(
-    points, point_range, nodes_per_crossing, points_per_node, idx, surface
-):
-    points[
-        get_contact_points(
-            [
-                (nodes_per_crossing - 1) * (2 * idx) + (nodes_per_crossing - 1),
-                (nodes_per_crossing - 1) * (2 * idx)
-                + 2 * (nodes_per_crossing - 1),
-            ],
-            point_range,
-            points_per_node,
-        )
-    ] = surface
 
 
 def generate_yarn(
@@ -142,7 +128,6 @@ def generate_yarn(
     vertical_half_axis=0.2,
     super_ellipse_power=1,
 ):
-
     keypoints = compute_key_points(
         cell_shape[direction], crossing_width, num_crossing
     )
@@ -210,17 +195,18 @@ def generate_yarn(
         super_ellipse_power,
     ) * np.sign(np.sin(angle_parameter))
 
+    crossing_ranges = np.reshape(crossing_idx[1:-1],(-1,2))
     triangles = generate_yarn_topology(num_nodes, points_per_node)
 
-    return points, triangles
+    return points, triangles, crossing_ranges
 
 
 # Curve params
-p, t = generate_yarn(
+p, t, c = generate_yarn(
     [5.0, 0.0],
     [30, 10, 10],
     20,
-    3,
+    4,
     7,
     3,
     20,
