@@ -113,8 +113,6 @@ def compute_key_points(yarn_length, crossing_width, num_crossing):
     return keypoints
 
 
-
-
 def generate_yarn(
     start_coord,
     cell_shape,
@@ -138,6 +136,7 @@ def generate_yarn(
         + 2 * (nodes_per_non_crossing // 2 - 1)
     )
     points = np.empty((num_nodes * points_per_node, 3), dtype=float)
+    points[:, direction] = -cell_shape[direction] / 2
 
     nodes_per_segment = np.concatenate(
         (
@@ -164,7 +163,7 @@ def generate_yarn(
                 points_per_node + points_per_node * crossing_idx[idx + 1]
             ),
             direction,
-        ] = np.repeat(
+        ] += np.repeat(
             np.linspace(
                 keypoints[idx],
                 keypoints[idx + 1],
@@ -186,22 +185,164 @@ def generate_yarn(
     )
     angle_parameter = np.tile(angle_parameter, num_nodes)
 
-    points[:, (direction + 1) % 2] = start_coord[0] + np.power(
-        np.abs(np.cos(angle_parameter)) * horizontal_half_axis,
-        super_ellipse_power,
-    ) * np.sign(np.cos(angle_parameter))
-    points[:, 2] = start_coord[1] + np.power(
-        np.abs(np.sin(angle_parameter)) * vertical_half_axis,
-        super_ellipse_power,
-    ) * np.sign(np.sin(angle_parameter))
+    points[:, (direction + 1) % 2] = (
+        start_coord[0]
+        + np.power(
+            np.abs(np.cos(angle_parameter)),
+            super_ellipse_power,
+        )
+        * np.sign(np.cos(angle_parameter))
+        * horizontal_half_axis
+    )
+    points[:, 2] = (
+        start_coord[1]
+        + np.power(
+            np.abs(np.sin(angle_parameter)),
+            super_ellipse_power,
+        )
+        * np.sign(np.sin(angle_parameter))
+        * vertical_half_axis
+    )
 
-    crossing_ranges = np.reshape(crossing_idx[1:-1],(-1,2))
+    crossing_ranges = np.reshape(crossing_idx[1:-1], (-1, 2))
     triangles = generate_yarn_topology(num_nodes, points_per_node)
 
     return points, triangles, crossing_ranges
 
 
-# Curve params
+def generate_warp_yarns(
+    cell_shape,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layers,
+    warp_width,
+    warp_height,
+    weft_width,
+    weft_height,
+):
+
+    nodes_per_crossing = 30
+    nodes_per_non_crossing = 5
+    points_per_node = 20
+    super_ellipse_power = 1.2
+
+    start_ys = (
+        np.mean(
+            np.reshape(
+                compute_key_points(
+                    cell_shape[1], warp_width, num_warp_per_layer
+                )[1:-1],
+                (-1, 2),
+            ),
+            axis=1,
+        )
+        - cell_shape[1] / 2
+    )
+    start_zs = np.linspace(
+        -cell_shape[2] / 2 + weft_height + warp_height / 2,
+        cell_shape[2] / 2 - weft_height - warp_height / 2,
+        num_layers,
+    )
+
+    points = []
+    triangles = []
+    crossing_ranges = []
+    for z in start_zs:
+        for y in start_ys:
+            point, triangle, crossing_range = generate_yarn(
+                [y, z],
+                cell_shape,
+                nodes_per_crossing,
+                nodes_per_non_crossing,
+                num_weft_per_layer,
+                weft_width,
+                points_per_node,
+                direction=0,
+                horizontal_half_axis=warp_width / 2,
+                vertical_half_axis=warp_height / 2,
+                super_ellipse_power=super_ellipse_power,
+            )
+            points.append(point)
+            triangles.append(triangle)
+            crossing_ranges.append(crossing_range)
+
+    return points, triangles, crossing_ranges
+
+
+def generate_weft_yarns(
+    cell_shape,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layers,
+    warp_width,
+    warp_height,
+    weft_width,
+    weft_height,
+):
+
+    nodes_per_crossing = 20
+    nodes_per_non_crossing = 5
+    points_per_node = 20
+    super_ellipse_power = 0.5
+
+    start_xs = (
+        np.mean(
+            np.reshape(
+                compute_key_points(
+                    cell_shape[0], warp_width, num_weft_per_layer
+                )[1:-1],
+                (-1, 2),
+            ),
+            axis=1,
+        )
+        - cell_shape[1] / 2
+    )
+    start_zs = np.linspace(
+        -cell_shape[2] / 2 + weft_height / 2,
+        cell_shape[2] / 2 - weft_height / 2,
+        num_layers + 1,
+    )
+
+    points = []
+    triangles = []
+    crossing_ranges = []
+    for z in start_zs:
+        for x in start_xs:
+            point, triangle, crossing_range = generate_yarn(
+                [x, z],
+                cell_shape,
+                nodes_per_crossing,
+                nodes_per_non_crossing,
+                num_warp_per_layer,
+                warp_width,
+                points_per_node,
+                direction=1,
+                horizontal_half_axis=weft_width / 2,
+                vertical_half_axis=weft_height / 2,
+                super_ellipse_power=super_ellipse_power,
+            )
+            points.append(point)
+            triangles.append(triangle)
+            crossing_ranges.append(crossing_range)
+
+    return points, triangles, crossing_ranges
+
+
+def aggregate_yarns(points, triangles):
+    total_num_points = 0
+    shifted_triangles = []
+    for point, triangle in zip(points, triangles):
+        triangle += total_num_points
+        shifted_triangles.append(triangle)
+        total_num_points += point.shape[0]
+
+    aggregate_points = np.concatenate(points, axis=0)
+    aggregate_triangles = np.concatenate(shifted_triangles, axis=0)
+
+    return aggregate_points, aggregate_triangles
+
+
+"""
 p, t, c = generate_yarn(
     [5.0, 0.0],
     [30, 10, 10],
@@ -213,11 +354,37 @@ p, t, c = generate_yarn(
     direction=0,
     super_ellipse_power=0.5,
 )
+"""
+ps, ts, cs = generate_warp_yarns(
+    [20, 20, 5],
+    4,
+    8,
+    5,
+    3.0,
+    0.5,
+    2.0,
+    0.5,
+)
 
-# pp = get_contact_zone([1, 3], [1, 9], 20)
+ap, at = aggregate_yarns(ps, ts)
+
+ps1, ts1, cs1 = generate_weft_yarns(
+    [20, 20, 5],
+    4,
+    8,
+    5,
+    3.0,
+    0.5,
+    2.0,
+    0.5,
+)
+
+ap1, at1 = aggregate_yarns(ps1, ts1)
 
 
 # print(pp)
 # t = np.delete(t,tt,axis=0)
-mesh = me.Mesh(p, [("triangle", t)])
+mesh = me.Mesh(ap, [("triangle", at)])
 mesh.write("./textomos/foo.stl")
+mesh = me.Mesh(ap1, [("triangle", at1)])
+mesh.write("./textomos/bar.stl")
