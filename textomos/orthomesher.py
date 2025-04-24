@@ -125,6 +125,8 @@ def generate_yarn(
     horizontal_half_axis=2,
     vertical_half_axis=0.2,
     super_ellipse_power=1,
+    flat_first_half=False,
+    flat_second_half=False,
 ):
     keypoints = compute_key_points(
         cell_shape[direction], crossing_width, num_crossing
@@ -194,14 +196,13 @@ def generate_yarn(
         * np.sign(np.cos(angle_parameter))
         * horizontal_half_axis
     )
-    points[:, 2] = (
-        start_coord[1]
-        + np.power(
-            np.abs(np.sin(angle_parameter)),
-            super_ellipse_power,
-        )
-        * np.sign(np.sin(angle_parameter))
-        * vertical_half_axis
+    points[:, 2] = start_coord[1] + np.power(
+        np.abs(np.sin(angle_parameter)),
+        super_ellipse_power,
+    ) * np.sign(np.sin(angle_parameter)) * vertical_half_axis * (
+        angle_parameter > np.pi if flat_second_half else 1
+    ) * (
+        angle_parameter < np.pi if flat_first_half else 1
     )
 
     crossing_ranges = np.reshape(crossing_idx[1:-1], (-1, 2))
@@ -302,11 +303,13 @@ def generate_weft_yarns(
         cell_shape[2] / 2 - weft_height / 2,
         num_layers + 1,
     )
+    start_zs[0] += weft_height / 2
+    start_zs[-1] -= weft_height / 2
 
     points = []
     triangles = []
     crossing_ranges = []
-    for z in start_zs:
+    for idx, z in enumerate(start_zs):
         for x in start_xs:
             point, triangle, crossing_range = generate_yarn(
                 [x, z],
@@ -318,8 +321,15 @@ def generate_weft_yarns(
                 points_per_node,
                 direction=1,
                 horizontal_half_axis=weft_width / 2,
-                vertical_half_axis=weft_height / 2,
-                super_ellipse_power=super_ellipse_power,
+                vertical_half_axis=weft_height / 2
+                + (weft_height / 2) * (idx == 0 or idx == num_layers),
+                super_ellipse_power=(
+                    1
+                    if (idx == 0 or idx == num_layers)
+                    else super_ellipse_power
+                ),
+                flat_first_half=idx == num_layers,
+                flat_second_half=idx == 0,
             )
             points.append(point)
             triangles.append(triangle)
@@ -356,7 +366,7 @@ p, t, c = generate_yarn(
 )
 """
 ps, ts, cs = generate_warp_yarns(
-    [20, 20, 5],
+    [20, 20, 5.2],
     4,
     8,
     5,
@@ -369,7 +379,7 @@ ps, ts, cs = generate_warp_yarns(
 ap, at = aggregate_yarns(ps, ts)
 
 ps1, ts1, cs1 = generate_weft_yarns(
-    [20, 20, 5],
+    [20, 20, 5.2],
     4,
     8,
     5,
