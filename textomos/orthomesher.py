@@ -185,7 +185,9 @@ def generate_yarn(
             np.linspace(np.pi, 2 * np.pi, points_per_node // 2, endpoint=False),
         )
     )
-    angle_parameter = np.tile(angle_parameter, num_nodes)
+    angle_parameter = np.tile(angle_parameter, num_nodes) * (
+        -1 if direction == 1 else 1
+    )
 
     points[:, (direction + 1) % 2] = (
         start_coord[0]
@@ -200,9 +202,9 @@ def generate_yarn(
         np.abs(np.sin(angle_parameter)),
         super_ellipse_power,
     ) * np.sign(np.sin(angle_parameter)) * vertical_half_axis * (
-        angle_parameter > np.pi if flat_second_half else 1
+        np.abs(angle_parameter) > np.pi if flat_second_half else 1
     ) * (
-        angle_parameter < np.pi if flat_first_half else 1
+        np.abs(angle_parameter) < np.pi if flat_first_half else 1
     )
 
     crossing_ranges = np.reshape(crossing_idx[1:-1], (-1, 2))
@@ -220,13 +222,11 @@ def generate_warp_yarns(
     warp_height,
     weft_width,
     weft_height,
+    super_ellipse_power,
+    nodes_per_crossing=20,
+    nodes_per_non_crossing=5,
+    points_per_node=20,
 ):
-
-    nodes_per_crossing = 30
-    nodes_per_non_crossing = 5
-    points_per_node = 20
-    super_ellipse_power = 1.2
-
     start_ys = (
         np.mean(
             np.reshape(
@@ -279,13 +279,11 @@ def generate_weft_yarns(
     warp_height,
     weft_width,
     weft_height,
+    super_ellipse_power,
+    nodes_per_crossing=20,
+    nodes_per_non_crossing=5,
+    points_per_node=20,
 ):
-
-    nodes_per_crossing = 20
-    nodes_per_non_crossing = 5
-    points_per_node = 20
-    super_ellipse_power = 0.5
-
     start_xs = (
         np.mean(
             np.reshape(
@@ -328,8 +326,8 @@ def generate_weft_yarns(
                     if (idx == 0 or idx == num_layers)
                     else super_ellipse_power
                 ),
-                flat_first_half=idx == num_layers,
-                flat_second_half=idx == 0,
+                flat_first_half=idx == 0,
+                flat_second_half=idx == num_layers,
             )
             points.append(point)
             triangles.append(triangle)
@@ -352,41 +350,81 @@ def aggregate_yarns(points, triangles):
     return aggregate_points, aggregate_triangles
 
 
-"""
-p, t, c = generate_yarn(
-    [5.0, 0.0],
-    [30, 10, 10],
-    20,
-    4,
-    7,
-    3,
-    20,
-    direction=0,
-    super_ellipse_power=0.5,
-)
-"""
+def handle_intersections(
+    warp_points,
+    warp_crossing_ranges,
+    weft_points,
+    weft_crossing_ranges,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layer,
+    points_per_node,
+):
+    for idx in range(num_warp_per_layer * num_layer):
+        for jdx in range(num_weft_per_layer):
+            weft_intersect_idx = idx % num_warp_per_layer
+            weft_idx_top = jdx + num_weft_per_layer * (
+                idx // num_warp_per_layer + 1
+            )
+            weft_idx_bottom = jdx + num_weft_per_layer * (
+                idx // num_warp_per_layer
+            )
+            warp_contact_idx_top = get_contact_points(
+                warp_crossing_ranges[idx][jdx],
+                [0, points_per_node // 2],
+                points_per_node,
+            )
+            top_coords = warp_points[idx][warp_contact_idx_top]
+            warp_contact_idx_bottom = get_contact_points(
+                warp_crossing_ranges[idx][jdx],
+                [points_per_node // 2, points_per_node],
+                points_per_node,
+            )
+            bottom_coords = warp_points[idx][warp_contact_idx_bottom]
+            weft_contact_idx_top = get_contact_points(
+                weft_crossing_ranges[weft_idx_top][weft_intersect_idx],
+                [0, points_per_node // 2],
+                points_per_node,
+            )
+            weft_contact_idx_top = np.flip(
+                weft_contact_idx_top.reshape((11, 11)).T, axis=(0, 1)
+            ).flatten()
+            [0, points_per_node // 2]
+            weft_contact_idx_bottom = get_contact_points(
+                weft_crossing_ranges[weft_idx_top][weft_intersect_idx],
+                [points_per_node // 2, points_per_node],
+                points_per_node,
+            )
+            weft_contact_idx_bottom = (
+                weft_contact_idx_bottom.reshape((11, 11)).T
+            ).flatten()
+            weft_points[weft_idx_top][weft_contact_idx_top] = top_coords
+            weft_points[weft_idx_bottom][
+                weft_contact_idx_bottom
+            ] = bottom_coords
+
+
+cell_shape = [20, 20, 5]
+
 ps, ts, cs = generate_warp_yarns(
-    [20, 20, 5.2],
-    4,
-    8,
-    5,
-    3.0,
-    0.5,
-    2.0,
-    0.5,
+    cell_shape, 4, 8, 5, 3.0, 0.5, 2.0, 0.5, 1.2, nodes_per_crossing=11
 )
 
 ap, at = aggregate_yarns(ps, ts)
 
 ps1, ts1, cs1 = generate_weft_yarns(
-    [20, 20, 5.2],
+    cell_shape, 4, 8, 5, 3.0, 0.5, 2.0, 0.5, 0.5, nodes_per_crossing=11
+)
+
+handle_intersections(
+    ps,
+    cs,
+    ps1,
+    cs1,
     4,
     8,
     5,
-    3.0,
-    0.5,
-    2.0,
-    0.5,
+    20,
 )
 
 ap1, at1 = aggregate_yarns(ps1, ts1)
