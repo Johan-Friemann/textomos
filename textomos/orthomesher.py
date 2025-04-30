@@ -1,5 +1,6 @@
 import numpy as np
 import meshio as me
+import scipy.interpolate as inp
 
 
 def generate_yarn_topology(num_nodes, points_per_node):
@@ -68,6 +69,156 @@ def generate_yarn_topology(num_nodes, points_per_node):
 
     triangles = np.vstack((tube, start_cap, end_cap))
     return triangles
+
+
+def generate_yarn_spline(
+    sample_points,
+    interpolation_parameter,
+    points_per_node,
+    horizontal_half_axis,
+    vertical_half_axis,
+    super_ellipse_power,
+    smoothing=0,
+):
+    num_nodes = len(interpolation_parameter)
+    t = np.linspace(0, 1, len(sample_points))
+    x = sample_points[:, 0]
+    y = sample_points[:, 1]
+    z = sample_points[:, 2]
+
+    spline = inp.make_splprep([t, x, y, z], s=smoothing)[0]
+    dspline = spline.derivative()
+
+    rs = spline(interpolation_parameter).T[:, 1:]
+    drs = dspline(interpolation_parameter).T[:, 1:]
+    ts = drs / np.linalg.norm(drs, axis=1)[:, np.newaxis]
+    bs = np.tile((0, 1, 0), (num_nodes, 1))
+    ns = np.linalg.cross(bs, ts, axis=1)
+
+    Rs = np.repeat(rs, points_per_node, axis=0)
+    Ns = np.repeat(ns, points_per_node, axis=0)
+    Bs = np.repeat(bs, points_per_node, axis=0)
+    angs = -np.linspace(0, 2 * np.pi, points_per_node, endpoint=False)
+    tiled_angs = np.tile(angs, num_nodes)
+    points = (
+        Rs
+        + np.power(
+            np.abs(np.cos(tiled_angs)[:, np.newaxis]),
+            super_ellipse_power,
+        )
+        * np.sign(np.cos(tiled_angs)[:, np.newaxis])
+        * horizontal_half_axis
+        * Bs
+        + np.power(
+            np.abs(np.sin(tiled_angs)[:, np.newaxis]),
+            super_ellipse_power,
+        )
+        * np.sign(np.sin(tiled_angs))[:, np.newaxis]
+        * vertical_half_axis
+        * Ns
+    )
+
+    return points
+
+
+def get_points_in_aabb(points, aabb):
+    x_conditions = np.logical_and(
+        points[:, 0] >= aabb[0, 0], points[:, 0] <= aabb[0, 1]
+    )
+    y_conditions = np.logical_and(
+        points[:, 1] >= aabb[1, 0], points[:, 1] <= aabb[1, 1]
+    )
+    z_conditions = np.logical_and(
+        points[:, 2] >= aabb[2, 0], points[:, 2] <= aabb[2, 1]
+    )
+    indices = np.logical_and(
+        np.logical_and(x_conditions, y_conditions), z_conditions
+    ).nonzero()[0]
+
+    return indices
+
+
+def generate_in_plane_sample_points(
+    cell_shape,
+    start_coord,
+    num_crossing,
+    crossing_width,
+    direction=0,
+    crimp=0.0,
+):
+    sample_points = np.zeros((num_crossing * 4 + 1, 3), dtype=float)
+
+    spacing = cell_shape[direction] / num_crossing
+    key_points = np.empty(num_crossing * 4 + 1, dtype=float)
+    key_points[0::4] = np.linspace(
+        -cell_shape[direction] / 2,
+        cell_shape[direction] / 2,
+        num_crossing + 1,
+    )
+    key_points[1::4] = np.linspace(
+        -cell_shape[direction] / 2 + (spacing - crossing_width) / 2,
+        cell_shape[direction] / 2 - spacing + (spacing - crossing_width) / 2,
+        num_crossing,
+    )
+    key_points[2::4] = np.linspace(
+        -cell_shape[direction] / 2 + spacing / 2,
+        cell_shape[direction] / 2 - spacing / 2,
+        num_crossing,
+    )
+    key_points[3::4] = np.linspace(
+        -cell_shape[direction] / 2 + (spacing + crossing_width) / 2,
+        cell_shape[direction] / 2 + (crossing_width - spacing) / 2,
+        num_crossing,
+    )
+
+    sample_points[:, direction] = key_points
+    sample_points[:, 1 - direction] = start_coord[0]
+    sample_points[:, 2] = start_coord[1]
+    sample_points[::8, 2] += crimp
+    sample_points[4::8, 2] -= crimp
+
+    return sample_points
+
+
+def generate_out_of_plane_sample_points(cell_shape, num_crossing, binder_thickness, roundness = 0.8 ,direction=0):
+    spacing = cell_shape[direction] / num_crossing
+    key_points = np.zeros(4*num_crossing+1, dtype=float)
+    key_points[::4] = np.linspace(
+        -cell_shape[direction] / 2,
+        cell_shape[direction] / 2,
+        num_crossing+1,
+    )
+    key_points[1::4] = np.linspace(
+        -cell_shape[direction] / 2,
+        cell_shape[direction] / 2-spacing,
+        num_crossing,
+    )
+    key_points[2::4] = np.linspace(
+        -cell_shape[direction] / 2+spacing/2,
+        cell_shape[direction] / 2-spacing/2,
+        num_crossing,
+    )
+    key_points[3::4] = np.linspace(
+        -cell_shape[direction] / 2+spacing,
+        cell_shape[direction] / 2,
+        num_crossing,
+    )
+ 
+    sample_points = np.zeros((4*num_crossing+1,3), dtype=float)
+    sample_points[:,0] = key_points
+    sample_points[1::8,2] = -roundness * (cell_shape[2]/2 - binder_thickness/2)
+    sample_points[2::8,2] = -cell_shape[2]/2 + binder_thickness/2
+    sample_points[3::8,2] = -roundness * (cell_shape[2]/2 - binder_thickness/2)
+    sample_points[5::8,2] = roundness * (cell_shape[2]/2 - binder_thickness/2)
+    sample_points[6::8,2] = cell_shape[2]/2 - binder_thickness/2
+    sample_points[7::8,2] = roundness * (cell_shape[2]/2 - binder_thickness/2)
+
+    
+    print(sample_points)
+    return sample_points
+
+
+################################################################################
 
 
 def get_contact_points(node_range, point_range, points_per_node):
@@ -438,6 +589,86 @@ def handle_intersections(
             ] = weft_bottom_coords
 
 
+def generate_binder_yarns(
+    cell_shape,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layers,
+    warp_width,
+    warp_height,
+    weft_width,
+    weft_height,
+):
+    start_ys = (
+        np.mean(
+            np.reshape(
+                compute_key_points(
+                    cell_shape[1], warp_width, num_warp_per_layer
+                )[2:-2],
+                (-1, 2),
+            ),
+            axis=1,
+        )
+        - cell_shape[1] / 2
+    )
+    binder_width = (cell_shape[1] - num_warp_per_layer * warp_width) / (
+        num_warp_per_layer
+    )
+
+    # generate_yarn_topology(num_nodes, points_per_node):
+
+
+def experiment():
+    points_per_node = 40
+    horizontal_half_axis = 1.0
+    vertical_half_axis = 0.2
+    super_ellipse_power = 0.5
+
+    x = np.array(
+        [
+            -10,
+            -7.5,
+            -7.5,
+            -5,
+            -5,
+            -2.5,
+            -2.5,
+            0,
+            0,
+            2.5,
+            2.5,
+            5.0,
+            5.0,
+            7.5,
+            7.5,
+            10,
+        ]
+    )
+    y = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    z = np.array([-2, -2, 2, 2, -2, -2, 2, 2, -2, -2, 2, 2, -2, -2, 2, 2])
+
+    interpolation_parameter = np.linspace(0, 1, 100)
+    num_nodes = len(interpolation_parameter)
+
+    # X = generate_in_plane_sample_points([20, 20, 4], [0, 0], 4, 2.0)
+    X = generate_out_of_plane_sample_points([20, 20, 4.4],8,vertical_half_axis)
+    # X = np.vstack((x, y, z)).T
+    points = generate_yarn_spline(
+        X,
+        interpolation_parameter,
+        points_per_node,
+        horizontal_half_axis,
+        vertical_half_axis,
+        super_ellipse_power,
+        smoothing=0.0
+    )
+    # get_points_in_aabb(points, np.array([[-10, -9], [-10, 10], [-2, -1]]))
+    triangles = generate_yarn_topology(num_nodes, points_per_node)
+    mesh = me.Mesh(points, [("triangle", triangles)])
+    mesh.write("./textomos/baz.stl")
+
+
+"""
 cell_shape = [20, 20, 4.4]
 weft_thickness = 0.6
 warp_thickness = 0.4
@@ -483,10 +714,22 @@ handle_intersections(
 ap, at = aggregate_yarns(ps, ts)
 ap1, at1 = aggregate_yarns(ps1, ts1)
 
+generate_binder_yarns(
+    cell_shape,
+    4,
+    8,
+    5,
+    3.0,
+    warp_thickness,
+    2.0,
+    weft_thickness,
+)"""
 
-# print(pp)
-# t = np.delete(t,tt,axis=0)
+experiment()
+
+"""
 mesh = me.Mesh(ap, [("triangle", at)])
 mesh.write("./textomos/foo.stl")
 mesh = me.Mesh(ap1, [("triangle", at1)])
 mesh.write("./textomos/bar.stl")
+"""
