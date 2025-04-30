@@ -223,7 +223,6 @@ def generate_out_of_plane_sample_points(
         cell_shape[2] / 2 - vertical_half_axis
     )
 
-    print(sample_points)
     return sample_points
 
 
