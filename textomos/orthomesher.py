@@ -180,40 +180,49 @@ def generate_in_plane_sample_points(
     return sample_points
 
 
-def generate_out_of_plane_sample_points(cell_shape, num_crossing, binder_thickness, roundness = 0.8 ,direction=0):
+def generate_out_of_plane_sample_points(
+    cell_shape, num_crossing, vertical_half_axis, roundness=0.8, direction=0
+):
     spacing = cell_shape[direction] / num_crossing
-    key_points = np.zeros(4*num_crossing+1, dtype=float)
+    key_points = np.zeros(4 * num_crossing + 1, dtype=float)
     key_points[::4] = np.linspace(
         -cell_shape[direction] / 2,
         cell_shape[direction] / 2,
-        num_crossing+1,
+        num_crossing + 1,
     )
     key_points[1::4] = np.linspace(
         -cell_shape[direction] / 2,
-        cell_shape[direction] / 2-spacing,
+        cell_shape[direction] / 2 - spacing,
         num_crossing,
     )
     key_points[2::4] = np.linspace(
-        -cell_shape[direction] / 2+spacing/2,
-        cell_shape[direction] / 2-spacing/2,
+        -cell_shape[direction] / 2 + spacing / 2,
+        cell_shape[direction] / 2 - spacing / 2,
         num_crossing,
     )
     key_points[3::4] = np.linspace(
-        -cell_shape[direction] / 2+spacing,
+        -cell_shape[direction] / 2 + spacing,
         cell_shape[direction] / 2,
         num_crossing,
     )
- 
-    sample_points = np.zeros((4*num_crossing+1,3), dtype=float)
-    sample_points[:,0] = key_points
-    sample_points[1::8,2] = -roundness * (cell_shape[2]/2 - binder_thickness/2)
-    sample_points[2::8,2] = -cell_shape[2]/2 + binder_thickness/2
-    sample_points[3::8,2] = -roundness * (cell_shape[2]/2 - binder_thickness/2)
-    sample_points[5::8,2] = roundness * (cell_shape[2]/2 - binder_thickness/2)
-    sample_points[6::8,2] = cell_shape[2]/2 - binder_thickness/2
-    sample_points[7::8,2] = roundness * (cell_shape[2]/2 - binder_thickness/2)
 
-    
+    sample_points = np.zeros((4 * num_crossing + 1, 3), dtype=float)
+    sample_points[:, 0] = key_points
+    sample_points[1::8, 2] = -roundness * (
+        cell_shape[2] / 2 - vertical_half_axis
+    )
+    sample_points[2::8, 2] = -cell_shape[2] / 2 + vertical_half_axis
+    sample_points[3::8, 2] = -roundness * (
+        cell_shape[2] / 2 - vertical_half_axis
+    )
+    sample_points[5::8, 2] = roundness * (
+        cell_shape[2] / 2 - vertical_half_axis
+    )
+    sample_points[6::8, 2] = cell_shape[2] / 2 - vertical_half_axis
+    sample_points[7::8, 2] = roundness * (
+        cell_shape[2] / 2 - vertical_half_axis
+    )
+
     print(sample_points)
     return sample_points
 
@@ -624,34 +633,13 @@ def experiment():
     vertical_half_axis = 0.2
     super_ellipse_power = 0.5
 
-    x = np.array(
-        [
-            -10,
-            -7.5,
-            -7.5,
-            -5,
-            -5,
-            -2.5,
-            -2.5,
-            0,
-            0,
-            2.5,
-            2.5,
-            5.0,
-            5.0,
-            7.5,
-            7.5,
-            10,
-        ]
-    )
-    y = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    z = np.array([-2, -2, 2, 2, -2, -2, 2, 2, -2, -2, 2, 2, -2, -2, 2, 2])
-
-    interpolation_parameter = np.linspace(0, 1, 100)
+    interpolation_parameter = np.linspace(0, 1, 200)
     num_nodes = len(interpolation_parameter)
 
     # X = generate_in_plane_sample_points([20, 20, 4], [0, 0], 4, 2.0)
-    X = generate_out_of_plane_sample_points([20, 20, 4.4],8,vertical_half_axis)
+    X = generate_out_of_plane_sample_points(
+        [20, 20, 4.4], 8, vertical_half_axis
+    )
     # X = np.vstack((x, y, z)).T
     points = generate_yarn_spline(
         X,
@@ -660,7 +648,7 @@ def experiment():
         horizontal_half_axis,
         vertical_half_axis,
         super_ellipse_power,
-        smoothing=0.0
+        smoothing=0.0,
     )
     # get_points_in_aabb(points, np.array([[-10, -9], [-10, 10], [-2, -1]]))
     triangles = generate_yarn_topology(num_nodes, points_per_node)
