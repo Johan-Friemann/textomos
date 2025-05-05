@@ -111,11 +111,13 @@ def generate_yarn_spline(
     if flat_top:
         vertical_asymmetry[points_per_node // 2 :] = 0.0
     if flat_left:
-        horizontal_asymmetry[points_per_node // 4: 3*(points_per_node // 2)] = 0.0
+        horizontal_asymmetry[
+            points_per_node // 4 : 3 * (points_per_node // 2)
+        ] = 0.0
     if flat_right:
-        horizontal_asymmetry[0 :points_per_node // 4] = 0.0
-        horizontal_asymmetry[3*(points_per_node // 4) :] = 0.0
-        
+        horizontal_asymmetry[0 : points_per_node // 4] = 0.0
+        horizontal_asymmetry[3 * (points_per_node // 4) :] = 0.0
+
     tiled_vertical_asymmetry = np.tile(vertical_asymmetry, num_nodes)
     tiled_horizontal_asymmetry = np.tile(horizontal_asymmetry, num_nodes)
 
@@ -397,7 +399,7 @@ def generate_binder_yarns(
     positions[1::2, 1] = -1
     positions[:, 0] = np.linspace(
         -cell_shape[0] / 2,
-        cell_shape[0] / 2 ,
+        cell_shape[0] / 2,
         num_warp_per_layer + 1,
     )
 
@@ -423,8 +425,8 @@ def generate_binder_yarns(
             super_ellipse_power,
             direction=0,
             smoothing=smoothing,
-            flat_left=idx==0,
-            flat_right=idx==(len(positions)-1)
+            flat_left=idx == 0,
+            flat_right=idx == (len(positions) - 1),
         )
         triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
         points.append(point)
