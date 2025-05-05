@@ -82,6 +82,8 @@ def generate_yarn_spline(
     smoothing=0.0,
     flat_top=False,
     flat_bottom=False,
+    flat_left=False,
+    flat_right=False,
 ):
     num_nodes = len(interpolation_parameter)
     t = np.linspace(0, 1, len(sample_points))
@@ -103,11 +105,19 @@ def generate_yarn_spline(
     Bs = np.repeat(bs, points_per_node, axis=0)
 
     vertical_asymmetry = np.ones(points_per_node)
+    horizontal_asymmetry = np.ones(points_per_node)
     if flat_bottom:
         vertical_asymmetry[: points_per_node // 2] = 0.0
     if flat_top:
         vertical_asymmetry[points_per_node // 2 :] = 0.0
+    if flat_left:
+        horizontal_asymmetry[points_per_node // 4: 3*(points_per_node // 2)] = 0.0
+    if flat_right:
+        horizontal_asymmetry[0 :points_per_node // 4] = 0.0
+        horizontal_asymmetry[3*(points_per_node // 4) :] = 0.0
+        
     tiled_vertical_asymmetry = np.tile(vertical_asymmetry, num_nodes)
+    tiled_horizontal_asymmetry = np.tile(horizontal_asymmetry, num_nodes)
 
     angs = -np.linspace(0, 2 * np.pi, points_per_node, endpoint=False)
     tiled_angs = np.tile(angs, num_nodes)
@@ -119,6 +129,7 @@ def generate_yarn_spline(
         )
         * np.sign(np.cos(tiled_angs)[:, np.newaxis])
         * horizontal_half_axis
+        * tiled_horizontal_asymmetry[:, np.newaxis]
         * Bs
         + np.power(
             np.abs(np.sin(tiled_angs)[:, np.newaxis]),
@@ -382,25 +393,25 @@ def generate_binder_yarns(
     smoothing=0.0,
 ):
 
-    positions = np.ones((num_warp_per_layer - 1, 2))
-    positions[0::2, 1] = -1
+    positions = np.ones((num_warp_per_layer + 1, 2))
+    positions[1::2, 1] = -1
     positions[:, 0] = np.linspace(
-        -cell_shape[0] / 2 + cell_shape[0] / num_warp_per_layer,
-        cell_shape[0] / 2 - cell_shape[0] / num_warp_per_layer,
-        num_warp_per_layer - 1,
+        -cell_shape[0] / 2,
+        cell_shape[0] / 2 ,
+        num_warp_per_layer + 1,
     )
 
     interpolation_parameter = np.linspace(0, 1, nodes_per_yarn)
     points = []
     triangles = []
 
-    for position in positions:
+    for idx, position in enumerate(positions):
         sample_points = generate_out_of_plane_sample_points(
             cell_shape,
             position,
             num_weft_per_layer,
             binder_thickness,
-            roundness=1.0,
+            roundness=0.75,
             direction=0,
         )
         point = generate_yarn_spline(
@@ -412,12 +423,15 @@ def generate_binder_yarns(
             super_ellipse_power,
             direction=0,
             smoothing=smoothing,
+            flat_left=idx==0,
+            flat_right=idx==(len(positions)-1)
         )
         triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
         points.append(point)
         triangles.append(triangle)
 
     return points, triangles
+
 
 def aggregate_yarns(points, triangles):
     total_num_points = 0
@@ -432,100 +446,11 @@ def aggregate_yarns(points, triangles):
 
     return aggregate_points, aggregate_triangles
 
+
 ################################################################################
 
-
-
-def handle_intersections(
-    warp_points,
-    warp_crossing_ranges,
-    weft_points,
-    weft_crossing_ranges,
-    num_warp_per_layer,
-    num_weft_per_layer,
-    num_layer,
-    points_per_node,
-    correction_eps=1e-3,
-):
-    for idx in range(num_warp_per_layer * num_layer):
-        for jdx in range(num_weft_per_layer):
-            weft_intersect_idx = idx % num_warp_per_layer
-            weft_idx_top = jdx + num_weft_per_layer * (
-                idx // num_warp_per_layer + 1
-            )
-            weft_idx_bottom = jdx + num_weft_per_layer * (
-                idx // num_warp_per_layer
-            )
-            warp_contact_idx_top = get_contact_points(
-                warp_crossing_ranges[idx][jdx],
-                [0, points_per_node // 2],
-                points_per_node,
-            )
-            warp_top_coords = warp_points[idx][warp_contact_idx_top]
-
-            warp_contact_idx_bottom = get_contact_points(
-                warp_crossing_ranges[idx][jdx],
-                [points_per_node // 2, points_per_node],
-                points_per_node,
-            )
-            warp_bottom_coords = warp_points[idx][warp_contact_idx_bottom]
-            weft_contact_idx_top = get_contact_points(
-                weft_crossing_ranges[weft_idx_top][weft_intersect_idx],
-                [0, points_per_node // 2],
-                points_per_node,
-            )
-            weft_contact_idx_bottom = get_contact_points(
-                weft_crossing_ranges[weft_idx_top][weft_intersect_idx],
-                [points_per_node // 2, points_per_node],
-                points_per_node,
-            )
-            weft_top_coords = weft_points[weft_idx_top][weft_contact_idx_top]
-            weft_bottom_coords = weft_points[weft_idx_bottom][
-                weft_contact_idx_bottom
-            ]
-            eps = 1e-3
-            center_of_mass_top = (
-                np.mean(weft_top_coords, axis=0)
-                + np.mean(warp_top_coords, axis=0)
-            ) / 2
-            warp_top_coords[
-                np.where(warp_top_coords[:, 2] > center_of_mass_top[2])[0], 2
-            ] = (center_of_mass_top[2] - correction_eps)
-            weft_top_coords[
-                np.where(weft_top_coords[:, 2] < center_of_mass_top[2])[0], 2
-            ] = (center_of_mass_top[2] + correction_eps)
-
-            center_of_mass_bottom = (
-                np.mean(weft_bottom_coords, axis=0)
-                + np.mean(warp_bottom_coords, axis=0)
-            ) / 2
-
-            warp_bottom_coords[
-                np.where(warp_bottom_coords[:, 2] < center_of_mass_bottom[2])[
-                    0
-                ],
-                2,
-            ] = (
-                center_of_mass_bottom[2] + correction_eps
-            )
-            weft_bottom_coords[
-                np.where(weft_bottom_coords[:, 2] > center_of_mass_bottom[2])[
-                    0
-                ],
-                2,
-            ] = (
-                center_of_mass_bottom[2] - correction_eps
-            )
-            warp_points[idx][warp_contact_idx_top] = warp_top_coords
-            weft_points[weft_idx_top][weft_contact_idx_top] = weft_top_coords
-            warp_points[idx][warp_contact_idx_bottom] = warp_bottom_coords
-            weft_points[weft_idx_bottom][
-                weft_contact_idx_bottom
-            ] = weft_bottom_coords
-
-
 super_ellipse_power = 0.5
-cell_shape = [20, 20, 4.4]
+cell_shape = [20, 20, 4.0]
 weft_thickness = 0.5
 warp_thickness = 0.4
 warp_width = 3.0
@@ -544,9 +469,7 @@ points, triangles = generate_weft_yarns(
     -binder_thickness / 2,
     super_ellipse_power,
 )
-ap, at = aggregate_yarns(points, triangles)
-mesh = me.Mesh(ap, [("triangle", at)])
-mesh.write("./textomos/bar.stl")
+ap1, at1 = aggregate_yarns(points, triangles)
 
 points, triangles = generate_warp_yarns(
     cell_shape,
@@ -559,9 +482,7 @@ points, triangles = generate_warp_yarns(
     weft_thickness,
     super_ellipse_power,
 )
-ap, at = aggregate_yarns(points, triangles)
-mesh = me.Mesh(ap, [("triangle", at)])
-mesh.write("./textomos/foo.stl")
+ap2, at2 = aggregate_yarns(points, triangles)
 
 points, triangles = generate_binder_yarns(
     cell_shape,
@@ -571,6 +492,11 @@ points, triangles = generate_binder_yarns(
     binder_thickness,
     super_ellipse_power,
 )
-ap, at = aggregate_yarns(points, triangles)
-mesh = me.Mesh(ap, [("triangle", at)])
+ap3, at3 = aggregate_yarns(points, triangles)
+
+mesh = me.Mesh(ap1, [("triangle", at1)])
+mesh.write("./textomos/bar.stl")
+mesh = me.Mesh(ap2, [("triangle", at2)])
+mesh.write("./textomos/foo.stl")
+mesh = me.Mesh(ap3, [("triangle", at3)])
 mesh.write("./textomos/baz.stl")
