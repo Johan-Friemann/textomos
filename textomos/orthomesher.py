@@ -82,7 +82,7 @@ def generate_yarn_spline(
     smoothing=0.0,
     flat_top=False,
     flat_bottom=False,
-):  
+):
     num_nodes = len(interpolation_parameter)
     t = np.linspace(0, 1, len(sample_points))
     x = sample_points[:, 0]
@@ -326,6 +326,7 @@ def generate_warp_yarns(
     warp_thickness,
     weft_width,
     weft_thickness,
+    binder_thickness,
     super_ellipse_power,
     nodes_per_yarn=100,
     points_per_node=20,
@@ -477,30 +478,64 @@ def aggregate_yarns(points, triangles):
 
 
 def create_orthogonal_sample(
-    cell_shape,
-    tiling,
-    matrix_path,
-    num_warp_per_layer,
-    num_weft_per_layer,
-    num_layers,
-    weft_width,
-    weft_thickness,
+    unit_cell_weft_length,
+    unit_cell_warp_length,
+    unit_cell_thickness,
+    weft_yarns_per_layer,
+    warp_yarns_per_layer,
+    number_of_yarn_layers,
+    weft_width_to_spacing_ratio,
     weft_super_ellipse_power,
-    weft_path,
-    warp_width,
-    warp_thickness,
+    warp_width_to_spacing_ratio,
     warp_super_ellipse_power,
-    warp_path,
-    binder_width,
-    binder_thickness,
+    weft_to_warp_ratio,
+    binder_width_to_spacing_ratio,
+    binder_thickness_to_spacing_ratio,
     binder_super_ellipse_power,
+    tiling,
+    weft_path,
+    warp_path,
     binder_path,
+    matrix_path,
 ):
+    num_weft_per_layer = weft_yarns_per_layer * tiling[1]
+    num_warp_per_layer = warp_yarns_per_layer * tiling[0]
+
+    cell_shape = [
+        unit_cell_weft_length * tiling[0],
+        unit_cell_warp_length * tiling[1],
+        unit_cell_thickness,
+    ]
+
+    weft_spacing = cell_shape[1] / num_weft_per_layer
+    weft_width = weft_width_to_spacing_ratio * weft_spacing
+    warp_spacing = cell_shape[0] / num_warp_per_layer
+    warp_width = warp_width_to_spacing_ratio * warp_spacing
+    binder_spacing = (
+        cell_shape[0] - num_warp_per_layer * warp_width
+    ) / num_warp_per_layer
+    binder_width = binder_spacing * binder_width_to_spacing_ratio
+    binder_thickness = (
+        (cell_shape[1] - num_weft_per_layer * weft_width)
+        / num_weft_per_layer
+        * binder_thickness_to_spacing_ratio
+    )
+    weft_thickness = (
+        (unit_cell_thickness - 2 * binder_thickness)
+        / (number_of_yarn_layers + 1)
+        * weft_to_warp_ratio
+    )
+    warp_thickness = (
+        (unit_cell_thickness - 2 * binder_thickness)
+        / (number_of_yarn_layers)
+        * (1 - weft_to_warp_ratio)
+    )
+
     points, triangles = generate_weft_yarns(
         cell_shape,
         num_warp_per_layer,
         num_weft_per_layer,
-        num_layers,
+        number_of_yarn_layers,
         warp_width,
         weft_width,
         weft_thickness,
@@ -516,11 +551,12 @@ def create_orthogonal_sample(
         cell_shape,
         num_warp_per_layer,
         num_weft_per_layer,
-        num_layers,
+        number_of_yarn_layers,
         warp_width,
         warp_thickness,
         weft_width,
         weft_thickness,
+        binder_thickness,
         warp_super_ellipse_power,
     )
     aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
@@ -562,43 +598,44 @@ def create_orthogonal_sample(
 
 ################################################################################
 
+unit_cell_weft_length = 4.5
+unit_cell_warp_length = 4.7
+unit_cell_thickness = 4.4
+weft_yarns_per_layer = 2
+warp_yarns_per_layer = 1
+number_of_yarn_layers = 5
+weft_width_to_spacing_ratio = 0.72
 weft_super_ellipse_power = 0.5
-warp_super_ellipse_power = 1.5
-binder_super_ellipse_power = 1.5
-cell_shape = [17.9, 19.7, 4.4]
-weft_thickness = 0.42
-warp_thickness = 0.43
-warp_width = 2.3
-weft_width = 1.8
-binder_width = 2.0
-binder_thickness = 0.45
-num_warp_per_layer = 4
-num_weft_per_layer = 8
-num_layers = 5
-tiling = None
-
+warp_width_to_spacing_ratio = 0.57
+warp_super_ellipse_power = 0.9
+weft_to_warp_ratio=0.55
+binder_width_to_spacing_ratio = 0.95
+binder_thickness_to_spacing_ratio = 0.75
+binder_super_ellipse_power = 0.5
+tiling = [4, 4, 1]
 matrix_path = "./textomos/matrix.stl"
 weft_path = "./textomos/weft.stl"
 warp_path = "./textomos/warp.stl"
 binder_path = "./textomos/binder.stl"
 
 create_orthogonal_sample(
-    cell_shape,
-    tiling,
-    matrix_path,
-    num_warp_per_layer,
-    num_weft_per_layer,
-    num_layers,
-    weft_width,
-    weft_thickness,
+    unit_cell_weft_length,
+    unit_cell_warp_length,
+    unit_cell_thickness,
+    weft_yarns_per_layer,
+    warp_yarns_per_layer,
+    number_of_yarn_layers,
+    weft_width_to_spacing_ratio,
     weft_super_ellipse_power,
-    weft_path,
-    warp_width,
-    warp_thickness,
+    warp_width_to_spacing_ratio,
     warp_super_ellipse_power,
-    warp_path,
-    binder_width,
-    binder_thickness,
+    weft_to_warp_ratio,
+    binder_width_to_spacing_ratio,
+    binder_thickness_to_spacing_ratio,
     binder_super_ellipse_power,
+    tiling,
+    weft_path,
+    warp_path,
     binder_path,
+    matrix_path,
 )
