@@ -548,6 +548,6 @@ intersected_binder_mesh.export("./textomos/binder.stl")
 
 
 cut_weft = trimesh.boolean.difference((weft_mesh,warp_mesh))
-cut_weft = trimesh.boolean.difference((cut_weft,warp_mesh))
+cut_weft = trimesh.boolean.difference((cut_weft,binder_mesh))
 cut_weft.export("./textomos/weft.stl")
 
