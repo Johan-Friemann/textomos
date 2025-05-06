@@ -1,5 +1,5 @@
 import numpy as np
-import meshio as me
+import trimesh
 import scipy.interpolate as inp
 
 
@@ -82,8 +82,6 @@ def generate_yarn_spline(
     smoothing=0.0,
     flat_top=False,
     flat_bottom=False,
-    flat_left=False,
-    flat_right=False,
 ):
     num_nodes = len(interpolation_parameter)
     t = np.linspace(0, 1, len(sample_points))
@@ -99,27 +97,22 @@ def generate_yarn_spline(
     ts = drs / np.linalg.norm(drs, axis=1)[:, np.newaxis]
     bs = np.tile((direction, 1 - direction, 0), (num_nodes, 1))
     ns = np.linalg.cross(bs, ts, axis=1)
+    # Below needed to prevent inversion when snapping to bounding box.
+    sgn = np.sign(ns[0, 2])
+    ns[0] = np.array([0, 0, sgn])
+    ns[-1] = np.array([0, 0, sgn])
 
     Rs = np.repeat(rs, points_per_node, axis=0)
     Ns = np.repeat(ns, points_per_node, axis=0)
     Bs = np.repeat(bs, points_per_node, axis=0)
 
     vertical_asymmetry = np.ones(points_per_node)
-    horizontal_asymmetry = np.ones(points_per_node)
     if flat_bottom:
         vertical_asymmetry[: points_per_node // 2] = 0.0
     if flat_top:
         vertical_asymmetry[points_per_node // 2 :] = 0.0
-    if flat_left:
-        horizontal_asymmetry[
-            points_per_node // 4 : 3 * (points_per_node // 2)
-        ] = 0.0
-    if flat_right:
-        horizontal_asymmetry[0 : points_per_node // 4] = 0.0
-        horizontal_asymmetry[3 * (points_per_node // 4) :] = 0.0
 
     tiled_vertical_asymmetry = np.tile(vertical_asymmetry, num_nodes)
-    tiled_horizontal_asymmetry = np.tile(horizontal_asymmetry, num_nodes)
 
     angs = -np.linspace(0, 2 * np.pi, points_per_node, endpoint=False)
     tiled_angs = np.tile(angs, num_nodes)
@@ -131,7 +124,6 @@ def generate_yarn_spline(
         )
         * np.sign(np.cos(tiled_angs)[:, np.newaxis])
         * horizontal_half_axis
-        * tiled_horizontal_asymmetry[:, np.newaxis]
         * Bs
         + np.power(
             np.abs(np.sin(tiled_angs)[:, np.newaxis]),
@@ -214,47 +206,47 @@ def generate_out_of_plane_sample_points(
     direction=0,
 ):
     spacing = cell_shape[direction] / num_crossing
-    key_points = np.zeros(4 * num_crossing + 1, dtype=float)
+    key_points = np.zeros(4 * num_crossing - 1, dtype=float)
     key_points[::4] = np.linspace(
-        -cell_shape[direction] / 2,
-        cell_shape[direction] / 2,
-        num_crossing + 1,
-    )
-    key_points[1::4] = np.linspace(
         -cell_shape[direction] / 2,
         cell_shape[direction] / 2 - spacing,
         num_crossing,
     )
-    key_points[2::4] = np.linspace(
+    key_points[1::4] = np.linspace(
         -cell_shape[direction] / 2 + spacing / 2,
         cell_shape[direction] / 2 - spacing / 2,
         num_crossing,
     )
-    key_points[3::4] = np.linspace(
+    key_points[2::4] = np.linspace(
         -cell_shape[direction] / 2 + spacing,
         cell_shape[direction] / 2,
         num_crossing,
     )
+    key_points[3::4] = np.linspace(
+        -cell_shape[direction] / 2 + spacing,
+        cell_shape[direction] / 2 - spacing,
+        num_crossing - 1,
+    )
 
-    sample_points = np.zeros((4 * num_crossing + 1, 3), dtype=float)
+    sample_points = np.zeros((4 * num_crossing - 1, 3), dtype=float)
     sample_points[:, direction] = key_points
     sample_points[:, 1 - direction] = position[0]
-    sample_points[1::8, 2] = (
+    sample_points[::8, 2] = (
         -roundness * (cell_shape[2] / 2 - binder_thickness / 2) * position[1]
     )
-    sample_points[2::8, 2] = (
+    sample_points[1::8, 2] = (
         -(cell_shape[2] / 2 - binder_thickness / 2) * position[1]
     )
-    sample_points[3::8, 2] = -(
+    sample_points[2::8, 2] = -(
+        roundness * (cell_shape[2] / 2 - binder_thickness / 2) * position[1]
+    )
+    sample_points[4::8, 2] = (
         roundness * (cell_shape[2] / 2 - binder_thickness / 2) * position[1]
     )
     sample_points[5::8, 2] = (
-        roundness * (cell_shape[2] / 2 - binder_thickness / 2) * position[1]
-    )
-    sample_points[6::8, 2] = (
         cell_shape[2] / 2 - binder_thickness / 2
     ) * position[1]
-    sample_points[7::8, 2] = (
+    sample_points[6::8, 2] = (
         roundness * (cell_shape[2] / 2 - binder_thickness / 2) * position[1]
     )
 
@@ -281,8 +273,8 @@ def generate_weft_yarns(
         num_weft_per_layer,
     )
     start_zs = np.linspace(
-        -cell_shape[2] / 2 + weft_thickness / 2,
-        cell_shape[2] / 2 - weft_thickness / 2,
+        -cell_shape[2] / 2 + binder_thickness/2 + weft_thickness / 2,
+        cell_shape[2] / 2 - binder_thickness/2 - weft_thickness / 2,
         num_layers + 1,
     )
     start_zs[0] += weft_thickness / 2
@@ -299,9 +291,7 @@ def generate_weft_yarns(
                 num_warp_per_layer,
                 warp_width,
                 direction=1,
-                crimp=binder_thickness
-                * (1 - 2 * (idxx % 2))
-                * (idxz == 0 or idxz == num_layers),
+                crimp=binder_thickness / 2 * (1 - 2 * (idxx % 2)),
             )
             point = generate_yarn_spline(
                 sample_points,
@@ -347,8 +337,14 @@ def generate_warp_yarns(
         num_warp_per_layer,
     )
     start_zs = np.linspace(
-        -cell_shape[2] / 2 + weft_thickness + warp_thickness / 2,
-        cell_shape[2] / 2 - weft_thickness - warp_thickness / 2,
+        -cell_shape[2] / 2
+        + binder_thickness/2
+        + weft_thickness
+        + warp_thickness / 2,
+        cell_shape[2] / 2
+        - binder_thickness/2
+        - weft_thickness
+        - warp_thickness / 2,
         num_layers,
     )
 
@@ -396,10 +392,10 @@ def generate_binder_yarns(
 ):
 
     positions = np.ones((num_warp_per_layer + 1, 2))
-    positions[1::2, 1] = -1
+    positions[0::2, 1] = -1
     positions[:, 0] = np.linspace(
-        -cell_shape[0] / 2,
-        cell_shape[0] / 2,
+        -cell_shape[1] / 2,
+        cell_shape[1] / 2,
         num_warp_per_layer + 1,
     )
 
@@ -413,7 +409,7 @@ def generate_binder_yarns(
             position,
             num_weft_per_layer,
             binder_thickness,
-            roundness=0.75,
+            roundness=0.6,
             direction=0,
         )
         point = generate_yarn_spline(
@@ -425,12 +421,43 @@ def generate_binder_yarns(
             super_ellipse_power,
             direction=0,
             smoothing=smoothing,
-            flat_left=idx == 0,
-            flat_right=idx == (len(positions) - 1),
         )
         triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
         points.append(point)
         triangles.append(triangle)
+
+    return points, triangles
+
+
+def generate_matrix(cell_shape):
+    points = np.array(
+        [
+            [-cell_shape[0] / 2, -cell_shape[1] / 2, -cell_shape[2] / 2],
+            [cell_shape[0] / 2, -cell_shape[1] / 2, -cell_shape[2] / 2],
+            [cell_shape[0] / 2, cell_shape[1] / 2, -cell_shape[2] / 2],
+            [-cell_shape[0] / 2, cell_shape[1] / 2, -cell_shape[2] / 2],
+            [-cell_shape[0] / 2, -cell_shape[1] / 2, cell_shape[2] / 2],
+            [cell_shape[0] / 2, -cell_shape[1] / 2, cell_shape[2] / 2],
+            [cell_shape[0] / 2, cell_shape[1] / 2, cell_shape[2] / 2],
+            [-cell_shape[0] / 2, cell_shape[1] / 2, cell_shape[2] / 2],
+        ]
+    )
+    triangles = np.array(
+        [
+            [0, 2, 1],
+            [0, 3, 2],
+            [0, 1, 5],
+            [0, 5, 4],
+            [1, 2, 5],
+            [2, 6, 5],
+            [2, 3, 6],
+            [3, 7, 6],
+            [0, 4, 3],
+            [4, 7, 3],
+            [4, 5, 6],
+            [4, 6, 7],
+        ]
+    )
 
     return points, triangles
 
@@ -451,14 +478,16 @@ def aggregate_yarns(points, triangles):
 
 ################################################################################
 
-super_ellipse_power = 0.5
-cell_shape = [20, 20, 4.0]
-weft_thickness = 0.5
-warp_thickness = 0.4
-warp_width = 3.0
-weft_width = 2.0
+weft_super_ellipse_power = 0.5
+warp_super_ellipse_power = 1.5
+binder_super_ellipse_power = 1.5
+cell_shape = [19.7, 17.9, 4.4]
+weft_thickness = 0.42
+warp_thickness = 0.43
+warp_width = 2.3
+weft_width = 1.8
 binder_width = 2.0
-binder_thickness = 0.4
+binder_thickness = 0.45
 
 points, triangles = generate_weft_yarns(
     cell_shape,
@@ -468,10 +497,14 @@ points, triangles = generate_weft_yarns(
     warp_width,
     weft_width,
     weft_thickness,
-    -binder_thickness / 2,
-    super_ellipse_power,
+    binder_thickness,
+    weft_super_ellipse_power,
 )
-ap1, at1 = aggregate_yarns(points, triangles)
+aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+weft_mesh = trimesh.Trimesh(
+    vertices=aggregated_points, faces=aggregated_triangles
+)
+
 
 points, triangles = generate_warp_yarns(
     cell_shape,
@@ -482,9 +515,13 @@ points, triangles = generate_warp_yarns(
     warp_thickness,
     weft_width,
     weft_thickness,
-    super_ellipse_power,
+    warp_super_ellipse_power,
 )
-ap2, at2 = aggregate_yarns(points, triangles)
+aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+warp_mesh = trimesh.Trimesh(
+    vertices=aggregated_points, faces=aggregated_triangles
+)
+warp_mesh.export("./textomos/warp.stl")
 
 points, triangles = generate_binder_yarns(
     cell_shape,
@@ -492,13 +529,25 @@ points, triangles = generate_binder_yarns(
     8,
     binder_width,
     binder_thickness,
-    super_ellipse_power,
+    binder_super_ellipse_power,
 )
-ap3, at3 = aggregate_yarns(points, triangles)
+aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+binder_mesh = trimesh.Trimesh(
+    vertices=aggregated_points, faces=aggregated_triangles
+)
 
-mesh = me.Mesh(ap1, [("triangle", at1)])
-mesh.write("./textomos/bar.stl")
-mesh = me.Mesh(ap2, [("triangle", at2)])
-mesh.write("./textomos/foo.stl")
-mesh = me.Mesh(ap3, [("triangle", at3)])
-mesh.write("./textomos/baz.stl")
+points, triangles = generate_matrix(cell_shape)
+matrix_mesh = trimesh.Trimesh(
+    vertices=points, faces=triangles
+)
+matrix_mesh.export("./textomos/matrix.stl")
+
+
+intersected_binder_mesh = trimesh.boolean.intersection((binder_mesh, matrix_mesh))
+intersected_binder_mesh.export("./textomos/binder.stl")
+
+
+cut_weft = trimesh.boolean.difference((weft_mesh,warp_mesh))
+cut_weft = trimesh.boolean.difference((cut_weft,warp_mesh))
+cut_weft.export("./textomos/weft.stl")
+
