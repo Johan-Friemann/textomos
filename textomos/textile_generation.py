@@ -303,6 +303,7 @@ def check_orthogonal_config_dict(config_dict):
 
     opt_keys = (
         "tiling",
+        "compaction",
         "textile_resolution",
         "warp_super_ellipse_power",
         "weft_super_ellipse_power",
@@ -310,12 +311,13 @@ def check_orthogonal_config_dict(config_dict):
     )
     def_vals = (
         [1, 1, 1],
+        [1.0, 1.0, 1.0],
         20,
         0.9,
         0.5,
         1.1,
     )
-    opt_types = (list, int, float, float, float)
+    opt_types = (list, list, int, float, float, float)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -342,6 +344,15 @@ def check_orthogonal_config_dict(config_dict):
                     raise TypeError("All entries of 'tiling' must be ints.")
                 if args[-1][i] < 1:
                     raise ValueError("All entries of 'tiling' must >= 1.")
+                
+        if opt_key == "compaction":
+            if not len(args[-1]) == 3:
+                raise ValueError("The entry 'compaction' must have length 3.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], float):
+                    raise TypeError("All entries of 'compaction' must be floats.")
+                if args[-1][i] <= 0.0:
+                    raise ValueError("All entries of 'compaction' must > 0.")
 
         if opt_key in [
             "weft_super_ellipse_power",
@@ -780,6 +791,7 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["warp_super_ellipse_power"],
             weave_config_dict["weft_to_warp_ratio"],
             weave_config_dict["binder_width_to_spacing_ratio"],
+            weave_config_dict["binder_thickness_to_spacing_ratio"],
             weave_config_dict["binder_super_ellipse_power"],
             weave_config_dict["tiling"],
             weave_config_dict["mesh_paths"][0],

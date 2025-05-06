@@ -343,7 +343,7 @@ def generate_warp_yarns(
 
     points = []
     triangles = []
-    
+
     offset = cell_shape[2] * (1 - num_stacks) / 2
     for stack in range(num_stacks):
         for z in start_zs:
@@ -412,7 +412,7 @@ def generate_binder_yarns(
                 roundness=0.6,
                 direction=1,
             )
-            sample_points[:,2] += offset
+            sample_points[:, 2] += offset
             point = generate_yarn_spline(
                 sample_points,
                 interpolation_parameter,
@@ -492,6 +492,7 @@ def create_orthogonal_sample(
     binder_width_to_spacing_ratio,
     binder_thickness_to_spacing_ratio,
     binder_super_ellipse_power,
+    compaction,
     tiling,
     weft_path,
     warp_path,
@@ -531,6 +532,9 @@ def create_orthogonal_sample(
         * (1 - weft_to_warp_ratio)
     )
 
+    for idx in range(3):
+        cell_shape[idx] *= compaction[idx]
+
     points, triangles = generate_weft_yarns(
         cell_shape,
         num_warp_per_layer,
@@ -565,7 +569,6 @@ def create_orthogonal_sample(
     warp_mesh = trimesh.Trimesh(
         vertices=aggregated_points, faces=aggregated_triangles
     )
-    warp_mesh.export(warp_path)
 
     points, triangles = generate_binder_yarns(
         cell_shape,
@@ -583,18 +586,23 @@ def create_orthogonal_sample(
     cell_shape[2] *= tiling[2]
     points, triangles = generate_matrix(cell_shape)
     matrix_mesh = trimesh.Trimesh(vertices=points, faces=triangles)
-    matrix_mesh.export(matrix_path)
 
     # Cut binder into cell shape
     intersected_binder_mesh = trimesh.boolean.intersection(
         (binder_mesh, matrix_mesh)
     )
-    intersected_binder_mesh.export(binder_path)
 
     # Cut warp and binder out of weft
     cut_weft = trimesh.boolean.difference((weft_mesh, warp_mesh))
-    cut_weft = trimesh.boolean.difference((cut_weft, binder_mesh))
+    cut_weft = trimesh.boolean.difference((cut_weft, intersected_binder_mesh))
+
+    # Cut binder out of warp
+    cut_warp = trimesh.boolean.difference((warp_mesh, intersected_binder_mesh))
+
     cut_weft.export(weft_path)
+    cut_warp.export(warp_path)
+    intersected_binder_mesh.export(binder_path)
+    matrix_mesh.export(matrix_path)
 
     return None
 
@@ -615,7 +623,8 @@ weft_to_warp_ratio = 0.55
 binder_width_to_spacing_ratio = 0.95
 binder_thickness_to_spacing_ratio = 0.5
 binder_super_ellipse_power = 1.1
-tiling = [4, 4, 4]
+compaction = [1.0, 1.0, 0.8]
+tiling = [4, 4, 1]
 matrix_path = "./textomos/matrix.stl"
 weft_path = "./textomos/weft.stl"
 warp_path = "./textomos/warp.stl"
@@ -636,6 +645,7 @@ create_orthogonal_sample(
     binder_width_to_spacing_ratio,
     binder_thickness_to_spacing_ratio,
     binder_super_ellipse_power,
+    compaction,
     tiling,
     weft_path,
     warp_path,
