@@ -82,7 +82,7 @@ def generate_yarn_spline(
     smoothing=0.0,
     flat_top=False,
     flat_bottom=False,
-):
+):  
     num_nodes = len(interpolation_parameter)
     t = np.linspace(0, 1, len(sample_points))
     x = sample_points[:, 0]
@@ -107,9 +107,9 @@ def generate_yarn_spline(
     Bs = np.repeat(bs, points_per_node, axis=0)
 
     vertical_asymmetry = np.ones(points_per_node)
-    if flat_bottom:
-        vertical_asymmetry[: points_per_node // 2] = 0.0
     if flat_top:
+        vertical_asymmetry[: points_per_node // 2] = 0.0
+    if flat_bottom:
         vertical_asymmetry[points_per_node // 2 :] = 0.0
 
     tiled_vertical_asymmetry = np.tile(vertical_asymmetry, num_nodes)
@@ -267,9 +267,9 @@ def generate_weft_yarns(
     points_per_node=20,
     smoothing=0.0,
 ):
-    start_xs = np.linspace(
-        -cell_shape[0] / 2 + cell_shape[0] / num_weft_per_layer / 2,
-        cell_shape[0] / 2 - cell_shape[0] / num_weft_per_layer / 2,
+    start_ys = np.linspace(
+        -cell_shape[1] / 2 + cell_shape[1] / num_weft_per_layer / 2,
+        cell_shape[1] / 2 - cell_shape[1] / num_weft_per_layer / 2,
         num_weft_per_layer,
     )
     start_zs = np.linspace(
@@ -284,14 +284,14 @@ def generate_weft_yarns(
     points = []
     triangles = []
     for idxz, z in enumerate(start_zs):
-        for idxx, x in enumerate(start_xs):
+        for idxy, y in enumerate(start_ys):
             sample_points = generate_in_plane_sample_points(
                 cell_shape,
-                [x, z],
+                [y, z],
                 num_warp_per_layer,
                 warp_width,
-                direction=1,
-                crimp=binder_thickness / 2 * (1 - 2 * (idxx % 2)),
+                direction=0,
+                crimp=binder_thickness / 2 * (1 - 2 * (idxy % 2)),
             )
             point = generate_yarn_spline(
                 sample_points,
@@ -305,7 +305,7 @@ def generate_weft_yarns(
                     if (idxz == 0 or idxz == num_layers)
                     else super_ellipse_power
                 ),
-                direction=1,
+                direction=0,
                 smoothing=smoothing,
                 flat_top=idxz == 0,
                 flat_bottom=idxz == num_layers,
@@ -331,9 +331,9 @@ def generate_warp_yarns(
     points_per_node=20,
     smoothing=0.0,
 ):
-    start_ys = np.linspace(
-        -cell_shape[1] / 2 + cell_shape[1] / num_warp_per_layer / 2,
-        cell_shape[1] / 2 - cell_shape[1] / num_warp_per_layer / 2,
+    start_xs = np.linspace(
+        -cell_shape[0] / 2 + cell_shape[0] / num_warp_per_layer / 2,
+        cell_shape[0] / 2 - cell_shape[0] / num_warp_per_layer / 2,
         num_warp_per_layer,
     )
     start_zs = np.linspace(
@@ -353,13 +353,13 @@ def generate_warp_yarns(
     points = []
     triangles = []
     for z in start_zs:
-        for y in start_ys:
+        for x in start_xs:
             sample_points = generate_in_plane_sample_points(
                 cell_shape,
-                [y, z],
+                [x, z],
                 num_weft_per_layer,
                 weft_width,
-                direction=0,
+                direction=1,
                 crimp=0.0,
             )
             point = generate_yarn_spline(
@@ -369,7 +369,7 @@ def generate_warp_yarns(
                 warp_width / 2,
                 warp_thickness / 2,
                 super_ellipse_power,
-                direction=0,
+                direction=1,
                 smoothing=smoothing,
             )
             triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
@@ -394,8 +394,8 @@ def generate_binder_yarns(
     positions = np.ones((num_warp_per_layer + 1, 2))
     positions[0::2, 1] = -1
     positions[:, 0] = np.linspace(
-        -cell_shape[1] / 2,
-        cell_shape[1] / 2,
+        -cell_shape[0] / 2,
+        cell_shape[0] / 2,
         num_warp_per_layer + 1,
     )
 
@@ -403,14 +403,14 @@ def generate_binder_yarns(
     points = []
     triangles = []
 
-    for idx, position in enumerate(positions):
+    for position in positions:
         sample_points = generate_out_of_plane_sample_points(
             cell_shape,
             position,
             num_weft_per_layer,
             binder_thickness,
             roundness=0.6,
-            direction=0,
+            direction=1,
         )
         point = generate_yarn_spline(
             sample_points,
@@ -419,7 +419,7 @@ def generate_binder_yarns(
             binder_width / 2,
             binder_thickness / 2,
             super_ellipse_power,
-            direction=0,
+            direction=1,
             smoothing=smoothing,
         )
         triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
@@ -565,7 +565,7 @@ def create_orthogonal_sample(
 weft_super_ellipse_power = 0.5
 warp_super_ellipse_power = 1.5
 binder_super_ellipse_power = 1.5
-cell_shape = [19.7, 17.9, 4.4]
+cell_shape = [17.9, 19.7, 4.4]
 weft_thickness = 0.42
 warp_thickness = 0.43
 warp_width = 2.3
