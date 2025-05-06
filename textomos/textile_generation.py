@@ -4,6 +4,7 @@ import pymeshlab as pml
 import numpy as np
 from numpy.random import rand
 from TexGen.Core import *
+from orthomesher import create_orthogonal_sample
 
 
 class TextileConfigError(Exception):
@@ -195,6 +196,162 @@ def check_layer2layer_config_dict(config_dict):
                 raise ValueError(
                     "The option 'cut_mesh' can only be 'weft' or 'warp'."
                 )
+
+    return dict(zip(req_keys + opt_keys, args))
+
+
+def check_orthogonal_config_dict(config_dict):
+    """Check that a config dict pertaining a orthogonal unit cell is valid.
+    If invalid an appropriate exception is raised.
+
+     Args:
+         config_dict (dictionary): A dictionary of tex_ray options.
+
+     Keyword args:
+         -
+
+     Returns:
+        orthogonal_dict (dict): A dictionary consisting of relevant orthogonal
+                                UC generation parameters.
+
+    """
+    args = []
+    req_keys = (
+        "mesh_paths",
+        "unit_cell_weft_length",
+        "unit_cell_warp_length",
+        "unit_cell_thickness",
+        "weft_yarns_per_layer",
+        "warp_yarns_per_layer",
+        "number_of_yarn_layers",
+        "weft_width_to_spacing_ratio",
+        "binder_width_to_spacing_ratio",
+        "warp_width_to_spacing_ratio",
+        "weft_to_warp_ratio",
+        "binder_thickness_to_spacing_ratio",
+    )
+
+    req_types = (
+        list,
+        float,
+        float,
+        float,
+        int,
+        int,
+        int,
+        float,
+        float,
+        float,
+        float,
+        float,
+    )
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise TextileConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+
+        if req_key == "mesh_paths":
+            for s in args[-1]:
+                if not isinstance(s, str):
+                    raise TypeError(
+                        "All entries of 'mesh_paths' must be strings."
+                    )
+            if len(args[-1]) != 4:
+                raise TypeError(
+                        "The entry 'mesh_paths' must have length 4."
+                    )
+        else:
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+            if (  # Two of the entries also have upper bounds.
+                req_key == "weft_width_to_spacing_ratio"
+                or req_key == "binder_width_to_spacing_ratio"
+                or req_key == "warp_width_to_spacing_ratio"
+                or req_key == "weft_to_warp_ratio"
+                or req_key == "binder_thickness_to_spacing_ratio"
+            ) and not args[-1] < 1:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be < 1."
+                )
+
+    opt_keys = (
+        "tiling",
+        "textile_resolution",
+        "warp_super_ellipse_power",
+        "weft_super_ellipse_power",
+        "binder_super_ellipse_power",
+    )
+    def_vals = (
+        [1, 1, 1],
+        20,
+        0.9,
+        0.5,
+        1.1,
+    )
+    opt_types = (list, int, float, float, float)
+
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+
+        if opt_key == "textile_resolution":
+            if args[-1] < 1:
+                raise ValueError("The entry 'textile_resolution' must >= 1.")
+
+        if opt_key == "tiling":
+            if not len(args[-1]) == 3:
+                raise ValueError("The entry 'tiling' must have length 3.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], int):
+                    raise TypeError("All entries of 'tiling' must be ints.")
+                if args[-1][i] < 1:
+                    raise ValueError("All entries of 'tiling' must >= 1.")
+
+        if opt_key in [
+            "weft_super_ellipse_power",
+            "warp_super_ellipse_power",
+            "binder_super_ellipse_power",
+        ]:
+            if args[-1] <= 0.0:
+                raise ValueError("The entry " + opt_key + " must > 0.0")
+            if args[-1] >= 2.0:
+                raise ValueError("The entry " + opt_key + " must < 2.0")
 
     return dict(zip(req_keys + opt_keys, args))
 
@@ -589,30 +746,51 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["shift_unit_cell"],
             weave_config_dict["textile_resolution"],
         )
+        write_weave_mesh(
+            Weft,
+            Warp,
+            weave_config_dict["mesh_paths"][0],
+            weave_config_dict["mesh_paths"][1],
+            weave_config_dict["mesh_paths"][2],
+        )
+
+        boolean_difference_post_processing(
+            weave_config_dict["mesh_paths"][0],
+            weave_config_dict["mesh_paths"][1],
+            weave_config_dict["cut_mesh"],
+        )
+
+        set_origin_to_barycenter(
+            weave_config_dict["mesh_paths"][0],
+            weave_config_dict["mesh_paths"][1],
+            weave_config_dict["mesh_paths"][2],
+        )
+    elif weave_type == "orthogonal":
+        weave_config_dict = check_orthogonal_config_dict(config_dict)
+        create_orthogonal_sample(
+            weave_config_dict["unit_cell_weft_length"],
+            weave_config_dict["unit_cell_warp_length"],
+            weave_config_dict["unit_cell_thickness"],
+            weave_config_dict["weft_yarns_per_layer"],
+            weave_config_dict["warp_yarns_per_layer"],
+            weave_config_dict["number_of_yarn_layers"],
+            weave_config_dict["weft_width_to_spacing_ratio"],
+            weave_config_dict["weft_super_ellipse_power"],
+            weave_config_dict["warp_width_to_spacing_ratio"],
+            weave_config_dict["warp_super_ellipse_power"],
+            weave_config_dict["weft_to_warp_ratio"],
+            weave_config_dict["binder_width_to_spacing_ratio"],
+            weave_config_dict["binder_super_ellipse_power"],
+            weave_config_dict["tiling"],
+            weave_config_dict["mesh_paths"][0],
+            weave_config_dict["mesh_paths"][1],
+            weave_config_dict["mesh_paths"][2],
+            weave_config_dict["mesh_paths"][3],
+        )
     else:
         raise NotImplementedError(
             "The weave type '" + str(weave_type) + "' is not available."
         )
-
-    write_weave_mesh(
-        Weft,
-        Warp,
-        weave_config_dict["mesh_paths"][0],
-        weave_config_dict["mesh_paths"][1],
-        weave_config_dict["mesh_paths"][2],
-    )
-
-    boolean_difference_post_processing(
-        weave_config_dict["mesh_paths"][0],
-        weave_config_dict["mesh_paths"][1],
-        weave_config_dict["cut_mesh"],
-    )
-
-    set_origin_to_barycenter(
-        weave_config_dict["mesh_paths"][0],
-        weave_config_dict["mesh_paths"][1],
-        weave_config_dict["mesh_paths"][2],
-    )
     return None
 
 
