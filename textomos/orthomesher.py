@@ -273,8 +273,8 @@ def generate_weft_yarns(
         num_weft_per_layer,
     )
     start_zs = np.linspace(
-        -cell_shape[2] / 2 + binder_thickness/2 + weft_thickness / 2,
-        cell_shape[2] / 2 - binder_thickness/2 - weft_thickness / 2,
+        -cell_shape[2] / 2 + binder_thickness / 2 + weft_thickness / 2,
+        cell_shape[2] / 2 - binder_thickness / 2 - weft_thickness / 2,
         num_layers + 1,
     )
     start_zs[0] += weft_thickness / 2
@@ -338,11 +338,11 @@ def generate_warp_yarns(
     )
     start_zs = np.linspace(
         -cell_shape[2] / 2
-        + binder_thickness/2
+        + binder_thickness / 2
         + weft_thickness
         + warp_thickness / 2,
         cell_shape[2] / 2
-        - binder_thickness/2
+        - binder_thickness / 2
         - weft_thickness
         - warp_thickness / 2,
         num_layers,
@@ -476,6 +476,90 @@ def aggregate_yarns(points, triangles):
     return aggregate_points, aggregate_triangles
 
 
+def create_orthogonal_sample(
+    cell_shape,
+    tiling,
+    matrix_path,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layers,
+    weft_width,
+    weft_thickness,
+    weft_super_ellipse_power,
+    weft_path,
+    warp_width,
+    warp_thickness,
+    warp_super_ellipse_power,
+    warp_path,
+    binder_width,
+    binder_thickness,
+    binder_super_ellipse_power,
+    binder_path,
+):
+    points, triangles = generate_weft_yarns(
+        cell_shape,
+        num_warp_per_layer,
+        num_weft_per_layer,
+        num_layers,
+        warp_width,
+        weft_width,
+        weft_thickness,
+        binder_thickness,
+        weft_super_ellipse_power,
+    )
+    aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+    weft_mesh = trimesh.Trimesh(
+        vertices=aggregated_points, faces=aggregated_triangles
+    )
+
+    points, triangles = generate_warp_yarns(
+        cell_shape,
+        num_warp_per_layer,
+        num_weft_per_layer,
+        num_layers,
+        warp_width,
+        warp_thickness,
+        weft_width,
+        weft_thickness,
+        warp_super_ellipse_power,
+    )
+    aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+    warp_mesh = trimesh.Trimesh(
+        vertices=aggregated_points, faces=aggregated_triangles
+    )
+    warp_mesh.export(warp_path)
+
+    points, triangles = generate_binder_yarns(
+        cell_shape,
+        num_warp_per_layer,
+        num_weft_per_layer,
+        binder_width,
+        binder_thickness,
+        binder_super_ellipse_power,
+    )
+    aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
+    binder_mesh = trimesh.Trimesh(
+        vertices=aggregated_points, faces=aggregated_triangles
+    )
+
+    points, triangles = generate_matrix(cell_shape)
+    matrix_mesh = trimesh.Trimesh(vertices=points, faces=triangles)
+    matrix_mesh.export(matrix_path)
+
+    # Cut binder into cell shape
+    intersected_binder_mesh = trimesh.boolean.intersection(
+        (binder_mesh, matrix_mesh)
+    )
+    intersected_binder_mesh.export(binder_path)
+
+    # Cut warp and binder out of weft
+    cut_weft = trimesh.boolean.difference((weft_mesh, warp_mesh))
+    cut_weft = trimesh.boolean.difference((cut_weft, binder_mesh))
+    cut_weft.export(weft_path)
+
+    return None
+
+
 ################################################################################
 
 weft_super_ellipse_power = 0.5
@@ -488,66 +572,33 @@ warp_width = 2.3
 weft_width = 1.8
 binder_width = 2.0
 binder_thickness = 0.45
+num_warp_per_layer = 4
+num_weft_per_layer = 8
+num_layers = 5
+tiling = None
 
-points, triangles = generate_weft_yarns(
+matrix_path = "./textomos/matrix.stl"
+weft_path = "./textomos/weft.stl"
+warp_path = "./textomos/warp.stl"
+binder_path = "./textomos/binder.stl"
+
+create_orthogonal_sample(
     cell_shape,
-    4,
-    8,
-    5,
-    warp_width,
+    tiling,
+    matrix_path,
+    num_warp_per_layer,
+    num_weft_per_layer,
+    num_layers,
     weft_width,
     weft_thickness,
-    binder_thickness,
     weft_super_ellipse_power,
-)
-aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
-weft_mesh = trimesh.Trimesh(
-    vertices=aggregated_points, faces=aggregated_triangles
-)
-
-
-points, triangles = generate_warp_yarns(
-    cell_shape,
-    4,
-    8,
-    5,
+    weft_path,
     warp_width,
     warp_thickness,
-    weft_width,
-    weft_thickness,
     warp_super_ellipse_power,
-)
-aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
-warp_mesh = trimesh.Trimesh(
-    vertices=aggregated_points, faces=aggregated_triangles
-)
-warp_mesh.export("./textomos/warp.stl")
-
-points, triangles = generate_binder_yarns(
-    cell_shape,
-    4,
-    8,
+    warp_path,
     binder_width,
     binder_thickness,
     binder_super_ellipse_power,
+    binder_path,
 )
-aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
-binder_mesh = trimesh.Trimesh(
-    vertices=aggregated_points, faces=aggregated_triangles
-)
-
-points, triangles = generate_matrix(cell_shape)
-matrix_mesh = trimesh.Trimesh(
-    vertices=points, faces=triangles
-)
-matrix_mesh.export("./textomos/matrix.stl")
-
-
-intersected_binder_mesh = trimesh.boolean.intersection((binder_mesh, matrix_mesh))
-intersected_binder_mesh.export("./textomos/binder.stl")
-
-
-cut_weft = trimesh.boolean.difference((weft_mesh,warp_mesh))
-cut_weft = trimesh.boolean.difference((cut_weft,binder_mesh))
-cut_weft.export("./textomos/weft.stl")
-
