@@ -301,6 +301,7 @@ def check_orthogonal_config_dict(config_dict):
 
     opt_keys = (
         "tiling",
+        "deform",
         "compaction",
         "textile_resolution",
         "warp_super_ellipse_power",
@@ -309,13 +310,14 @@ def check_orthogonal_config_dict(config_dict):
     )
     def_vals = (
         [1, 1, 1],
+        [],
         [1.0, 1.0, 1.0],
         20,
         0.9,
         0.5,
         1.1,
     )
-    opt_types = (list, list, int, float, float, float)
+    opt_types = (list, list, list, int, float, float, float)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -354,6 +356,19 @@ def check_orthogonal_config_dict(config_dict):
                 if args[-1][i] <= 0.0:
                     raise ValueError("All entries of 'compaction' must > 0.")
 
+        if opt_key == "deform":  # Special exception raising for 'deform'
+            if not len(args[-1]) in [0, 12]:
+                raise ValueError("The entry 'deform' must have length 0 or 12.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], float):
+                    raise TypeError("All entries of 'deform' must be floats.")
+                if args[-1][i] < 0.0:
+                    raise ValueError("All entries of 'deform' must >= 0.")
+                if i in [0, 1, 2, 4, 5, 6, 8, 9, 10] and args[-1][i] > 100.0:
+                    raise ValueError(
+                        "All scaling entries (0, 1, 2, 4, 5, 6, 8, 9, and 10) " 
+                        + "of 'deform' must <= 100.0."
+                    )
         if opt_key in [
             "weft_super_ellipse_power",
             "warp_super_ellipse_power",
@@ -794,10 +809,12 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["binder_thickness_to_spacing_ratio"],
             weave_config_dict["binder_super_ellipse_power"],
             weave_config_dict["tiling"],
+            weave_config_dict["deform"],
             weave_config_dict["mesh_paths"][0],
             weave_config_dict["mesh_paths"][1],
             weave_config_dict["mesh_paths"][2],
             weave_config_dict["mesh_paths"][3],
+            weave_config_dict["textile_resolution"],
         )
     else:
         raise NotImplementedError(
