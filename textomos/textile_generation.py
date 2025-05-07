@@ -809,6 +809,7 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["binder_thickness_to_spacing_ratio"],
             weave_config_dict["binder_super_ellipse_power"],
             weave_config_dict["tiling"],
+            weave_config_dict["compaction"],
             weave_config_dict["deform"],
             weave_config_dict["mesh_paths"][0],
             weave_config_dict["mesh_paths"][1],
