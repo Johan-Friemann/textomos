@@ -1,6 +1,7 @@
 import numpy as np
 import trimesh
 import scipy.interpolate as inp
+from scipy.spatial.transform import Rotation as R
 
 
 def generate_yarn_topology(num_nodes, points_per_node):
@@ -78,6 +79,8 @@ def generate_yarn_spline(
     horizontal_half_axis,
     vertical_half_axis,
     super_ellipse_power,
+    deform = [0.0, 0.0, 0.0, 0.0],
+    sampling_step=20,
     direction=0,
     smoothing=0.0,
     flat_top=False,
@@ -103,8 +106,81 @@ def generate_yarn_spline(
     ns[-1] = np.array([0, 0, sgn])
 
     Rs = np.repeat(rs, points_per_node, axis=0)
+    Ts = np.repeat(ts, points_per_node, axis=0)
     Ns = np.repeat(ns, points_per_node, axis=0)
     Bs = np.repeat(bs, points_per_node, axis=0)
+    if deform[0] != 0.0:
+        interpolated_steps = np.linspace(0, 1, num_nodes)
+        sampled_steps = np.linspace(0, 1, num_nodes // sampling_step)
+        sampled_deforms = (
+            2
+            * (np.random.rand(num_nodes // sampling_step) - 0.5)
+            * horizontal_half_axis
+            * deform[0]
+            / 100.0
+        )
+        horizontal_deforms = np.interp(
+            interpolated_steps, sampled_steps, sampled_deforms
+        )
+
+        tiled_horizontal_deforms = np.repeat(
+            horizontal_deforms, points_per_node
+        )
+    else:
+        tiled_horizontal_deforms = np.zeros(num_nodes * points_per_node)
+    if deform[1] != 0.0:
+        interpolated_steps = np.linspace(0, 1, num_nodes)
+        sampled_steps = np.linspace(0, 1, num_nodes // sampling_step)
+        sampled_deforms = (
+            2
+            * (np.random.rand(num_nodes // sampling_step) - 0.5)
+            * horizontal_half_axis
+            * deform[1]
+            / 100.0
+        )
+        vertical_deforms = np.interp(
+            interpolated_steps, sampled_steps, sampled_deforms
+        )
+        tiled_vertical_deforms = np.repeat(vertical_deforms, points_per_node)
+    else:
+        tiled_vertical_deforms = np.zeros(num_nodes * points_per_node)
+    if deform[2] != 0.0:
+        interpolated_steps = np.linspace(0, 1, num_nodes)
+        sampled_steps = np.linspace(0, 1, num_nodes // sampling_step)
+        sampled_deforms = (
+            2
+            * (np.random.rand(num_nodes // sampling_step) - 0.5)
+            * super_ellipse_power
+            * deform[2]
+            / 100.0
+        )
+        super_ellipse_power_deforms = np.interp(
+            interpolated_steps, sampled_steps, sampled_deforms
+        )
+        tiled_super_ellipse_power_deforms = np.repeat(
+            super_ellipse_power_deforms, points_per_node
+        )
+    else:
+        tiled_super_ellipse_power_deforms = np.zeros(
+            num_nodes * points_per_node
+        )
+    if deform[3] != 0.0:
+        interpolated_steps = np.linspace(0, 1, num_nodes)
+        sampled_steps = np.linspace(0, 1, num_nodes // sampling_step)
+        sampled_rotations = (
+            2
+            * (np.random.rand(num_nodes // sampling_step) - 0.5)
+            * deform[2]
+            * np.pi
+            / 180.0
+        )
+        rotation_deforms = np.interp(
+            interpolated_steps, sampled_steps, sampled_rotations
+        )
+        tiled_rotation_deforms = np.repeat(rotation_deforms, points_per_node)
+        Rots = R.from_rotvec(tiled_rotation_deforms[:, np.newaxis] * Ts)
+        Ns = Rots.apply(Ns)
+        Bs = Rots.apply(Bs)
 
     vertical_asymmetry = np.ones(points_per_node)
     if flat_top:
@@ -120,18 +196,22 @@ def generate_yarn_spline(
         Rs
         + np.power(
             np.abs(np.cos(tiled_angs)[:, np.newaxis]),
-            super_ellipse_power,
+            super_ellipse_power
+            * (1 + tiled_super_ellipse_power_deforms[:, np.newaxis]),
         )
         * np.sign(np.cos(tiled_angs)[:, np.newaxis])
         * horizontal_half_axis
+        * (1 + tiled_horizontal_deforms[:, np.newaxis])
         * Bs
         + np.power(
             np.abs(np.sin(tiled_angs)[:, np.newaxis]),
-            super_ellipse_power,
+            super_ellipse_power
+            * (1 + tiled_super_ellipse_power_deforms[:, np.newaxis]),
         )
         * np.sign(np.sin(tiled_angs))[:, np.newaxis]
         * vertical_half_axis
         * tiled_vertical_asymmetry[:, np.newaxis]
+        * (1 + tiled_vertical_deforms[:, np.newaxis])
         * Ns
     )
 
@@ -247,6 +327,7 @@ def generate_weft_yarns(
     binder_thickness,
     super_ellipse_power,
     num_stacks,
+    internal_crimp=True,
     nodes_per_yarn=100,
     points_per_node=20,
     smoothing=0.0,
@@ -277,7 +358,10 @@ def generate_weft_yarns(
                     num_warp_per_layer,
                     warp_width,
                     direction=0,
-                    crimp=binder_thickness / 2 * (1 - 2 * (idxy % 2)),
+                    crimp=((idxz == 0 or idxz == num_layers) or internal_crimp)
+                    * (1 - 2 * (idxy % 2))
+                    * binder_thickness
+                    / 2,
                 )
                 point = generate_yarn_spline(
                     sample_points,
@@ -587,17 +671,27 @@ def create_orthogonal_sample(
     points, triangles = generate_matrix(cell_shape)
     matrix_mesh = trimesh.Trimesh(vertices=points, faces=triangles)
 
-    # Cut binder into cell shape
+    # Cut yarns into cell shape
+    intersected_weft_mesh = trimesh.boolean.intersection(
+        (weft_mesh, matrix_mesh)
+    )
+    intersected_warp_mesh = trimesh.boolean.intersection(
+        (warp_mesh, matrix_mesh)
+    )
     intersected_binder_mesh = trimesh.boolean.intersection(
         (binder_mesh, matrix_mesh)
     )
 
     # Cut warp and binder out of weft
-    cut_weft = trimesh.boolean.difference((weft_mesh, warp_mesh))
+    cut_weft = trimesh.boolean.difference(
+        (intersected_weft_mesh, intersected_warp_mesh)
+    )
     cut_weft = trimesh.boolean.difference((cut_weft, intersected_binder_mesh))
 
     # Cut binder out of warp
-    cut_warp = trimesh.boolean.difference((warp_mesh, intersected_binder_mesh))
+    cut_warp = trimesh.boolean.difference(
+        (intersected_warp_mesh, intersected_binder_mesh)
+    )
 
     cut_weft.export(weft_path)
     cut_warp.export(warp_path)
@@ -624,7 +718,7 @@ binder_width_to_spacing_ratio = 0.95
 binder_thickness_to_spacing_ratio = 0.5
 binder_super_ellipse_power = 1.1
 compaction = [1.0, 1.0, 0.8]
-tiling = [4, 4, 1]
+tiling = [4, 4, 4]
 matrix_path = "./textomos/matrix.stl"
 weft_path = "./textomos/weft.stl"
 warp_path = "./textomos/warp.stl"
