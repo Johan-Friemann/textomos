@@ -79,13 +79,16 @@ def generate_yarn_spline(
     horizontal_half_axis,
     vertical_half_axis,
     super_ellipse_power,
-    deform = [0.0, 0.0, 0.0, 0.0],
+    deform=[],
     sampling_step=20,
     direction=0,
     smoothing=0.0,
     flat_top=False,
     flat_bottom=False,
-):
+):  
+    if deform == []:
+        deform = 4*[0.0]
+
     num_nodes = len(interpolation_parameter)
     t = np.linspace(0, 1, len(sample_points))
     x = sample_points[:, 0]
@@ -170,7 +173,7 @@ def generate_yarn_spline(
         sampled_rotations = (
             2
             * (np.random.rand(num_nodes // sampling_step) - 0.5)
-            * deform[2]
+            * deform[3]
             * np.pi
             / 180.0
         )
@@ -327,6 +330,7 @@ def generate_weft_yarns(
     binder_thickness,
     super_ellipse_power,
     num_stacks,
+    deform=[],
     internal_crimp=True,
     nodes_per_yarn=100,
     points_per_node=20,
@@ -376,6 +380,7 @@ def generate_weft_yarns(
                         else super_ellipse_power
                     ),
                     direction=0,
+                    deform=deform,
                     smoothing=smoothing,
                     flat_top=idxz == 0,
                     flat_bottom=idxz == num_layers,
@@ -402,6 +407,7 @@ def generate_warp_yarns(
     binder_thickness,
     super_ellipse_power,
     num_stacks,
+    deform=[],
     nodes_per_yarn=100,
     points_per_node=20,
     smoothing=0.0,
@@ -448,6 +454,7 @@ def generate_warp_yarns(
                     warp_thickness / 2,
                     super_ellipse_power,
                     direction=1,
+                    deform=deform,
                     smoothing=smoothing,
                 )
                 triangle = generate_yarn_topology(
@@ -468,6 +475,7 @@ def generate_binder_yarns(
     binder_thickness,
     super_ellipse_power,
     num_stacks,
+    deform=[],
     nodes_per_yarn=100,
     points_per_node=20,
     smoothing=0.0,
@@ -505,6 +513,7 @@ def generate_binder_yarns(
                 binder_thickness / 2,
                 super_ellipse_power,
                 direction=1,
+                deform=deform,
                 smoothing=smoothing,
             )
             triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
@@ -578,10 +587,12 @@ def create_orthogonal_sample(
     binder_super_ellipse_power,
     compaction,
     tiling,
+    deform,
     weft_path,
     warp_path,
     binder_path,
     matrix_path,
+    textile_resolution,
 ):
     num_weft_per_layer = weft_yarns_per_layer * tiling[1]
     num_warp_per_layer = warp_yarns_per_layer * tiling[0]
@@ -630,6 +641,13 @@ def create_orthogonal_sample(
         binder_thickness,
         weft_super_ellipse_power,
         tiling[2],
+        deform=deform[0:4],
+        nodes_per_yarn=round(
+            textile_resolution
+            * cell_shape[1]
+            / (2 * weft_thickness + 2 * weft_width)
+        ),
+        points_per_node=textile_resolution,
     )
     aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
     weft_mesh = trimesh.Trimesh(
@@ -648,6 +666,13 @@ def create_orthogonal_sample(
         binder_thickness,
         warp_super_ellipse_power,
         tiling[2],
+        deform=deform[4:8],
+        nodes_per_yarn=round(
+            textile_resolution
+            * cell_shape[0]
+            / (2 * warp_thickness + 2 * warp_width)
+        ),
+        points_per_node=textile_resolution,
     )
     aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
     warp_mesh = trimesh.Trimesh(
@@ -662,6 +687,13 @@ def create_orthogonal_sample(
         binder_thickness,
         binder_super_ellipse_power,
         tiling[2],
+        deform=deform[8:12],
+        nodes_per_yarn=round(
+            textile_resolution
+            * cell_shape[0]
+            / (2 * binder_thickness + 2 * binder_width)
+        ),
+        points_per_node=textile_resolution,
     )
     aggregated_points, aggregated_triangles = aggregate_yarns(points, triangles)
     binder_mesh = trimesh.Trimesh(
@@ -719,6 +751,8 @@ binder_thickness_to_spacing_ratio = 0.5
 binder_super_ellipse_power = 1.1
 compaction = [1.0, 1.0, 0.8]
 tiling = [4, 4, 4]
+deform = [10.0, 0.0, 0.0, 5.0, 0.0, 0.0, 50.0, 0.0, 0.0, 20.0, 0.0, 0.0]
+textile_resolution = 20
 matrix_path = "./textomos/matrix.stl"
 weft_path = "./textomos/weft.stl"
 warp_path = "./textomos/warp.stl"
@@ -741,8 +775,10 @@ create_orthogonal_sample(
     binder_super_ellipse_power,
     compaction,
     tiling,
+    deform,
     weft_path,
     warp_path,
     binder_path,
     matrix_path,
+    textile_resolution,
 )
