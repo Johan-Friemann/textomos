@@ -274,9 +274,7 @@ def check_orthogonal_config_dict(config_dict):
                         "All entries of 'mesh_paths' must be strings."
                     )
             if len(args[-1]) != 4:
-                raise TypeError(
-                        "The entry 'mesh_paths' must have length 4."
-                    )
+                raise TypeError("The entry 'mesh_paths' must have length 4.")
         else:
             if not args[-1] > 0:
                 raise ValueError(
@@ -344,13 +342,15 @@ def check_orthogonal_config_dict(config_dict):
                     raise TypeError("All entries of 'tiling' must be ints.")
                 if args[-1][i] < 1:
                     raise ValueError("All entries of 'tiling' must >= 1.")
-                
+
         if opt_key == "compaction":
             if not len(args[-1]) == 3:
                 raise ValueError("The entry 'compaction' must have length 3.")
             for i in range(len(args[-1])):
                 if not isinstance(args[-1][i], float):
-                    raise TypeError("All entries of 'compaction' must be floats.")
+                    raise TypeError(
+                        "All entries of 'compaction' must be floats."
+                    )
                 if args[-1][i] <= 0.0:
                     raise ValueError("All entries of 'compaction' must > 0.")
 
