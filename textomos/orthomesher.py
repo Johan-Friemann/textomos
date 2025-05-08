@@ -588,6 +588,7 @@ def create_orthogonal_sample(
     compaction,
     tiling,
     deform,
+    internal_crimp,
     weft_path,
     warp_path,
     binder_path,
@@ -641,6 +642,7 @@ def create_orthogonal_sample(
         binder_thickness,
         weft_super_ellipse_power,
         tiling[2],
+        internal_crimp=internal_crimp,
         deform=deform[0:4],
         nodes_per_yarn=round(
             textile_resolution

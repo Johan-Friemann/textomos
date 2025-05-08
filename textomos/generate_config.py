@@ -278,6 +278,9 @@ def generate_orthogonal_geometry_config(**kwargs):
         deform_rotate (list(float)): Lower and upper bound for cross section
                                      rotation deformation.
 
+        internal_crimp (float): Probability of  having crimp on the interior
+                                weft yarns. Should be between 0.0 and 1.0.
+
         textile_resolution (int): Texgen mesh resolution.
 
 
@@ -405,6 +408,9 @@ def generate_orthogonal_geometry_config(**kwargs):
         + np.random.rand()
         * (kwargs["deform_rotate"][1] - kwargs["deform_rotate"][0]),
     ]
+    sample_config_dict["internal_crimp"] = (
+        np.random.rand() < kwargs["internal_crimp"]
+    )
     sample_config_dict["textile_resolution"] = kwargs["textile_resolution"]
     sample_config_dict["compaction"] = [
         kwargs["compaction"][0]

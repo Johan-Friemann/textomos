@@ -307,6 +307,7 @@ def check_orthogonal_config_dict(config_dict):
         "warp_super_ellipse_power",
         "weft_super_ellipse_power",
         "binder_super_ellipse_power",
+        "internal_crimp",
     )
     def_vals = (
         [1, 1, 1],
@@ -316,8 +317,9 @@ def check_orthogonal_config_dict(config_dict):
         0.9,
         0.5,
         1.1,
+        True
     )
-    opt_types = (list, list, list, int, float, float, float)
+    opt_types = (list, list, list, int, float, float, float, bool)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
         args.append(config_dict.get(opt_key, def_val))
@@ -811,6 +813,7 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["compaction"],
             weave_config_dict["tiling"],
             weave_config_dict["deform"],
+            weave_config_dict["internal_crimp"],
             weave_config_dict["mesh_paths"][0],
             weave_config_dict["mesh_paths"][1],
             weave_config_dict["mesh_paths"][2],
