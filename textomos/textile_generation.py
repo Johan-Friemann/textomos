@@ -309,16 +309,7 @@ def check_orthogonal_config_dict(config_dict):
         "binder_super_ellipse_power",
         "internal_crimp",
     )
-    def_vals = (
-        [1, 1, 1],
-        [],
-        [1.0, 1.0, 1.0],
-        20,
-        0.9,
-        0.5,
-        1.1,
-        True
-    )
+    def_vals = ([1, 1, 1], [], [1.0, 1.0, 1.0], 20, 0.9, 0.5, 1.1, True)
     opt_types = (list, list, list, int, float, float, float, bool)
 
     for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
@@ -368,7 +359,7 @@ def check_orthogonal_config_dict(config_dict):
                     raise ValueError("All entries of 'deform' must >= 0.")
                 if i in [0, 1, 2, 4, 5, 6, 8, 9, 10] and args[-1][i] > 100.0:
                     raise ValueError(
-                        "All scaling entries (0, 1, 2, 4, 5, 6, 8, 9, and 10) " 
+                        "All scaling entries (0, 1, 2, 4, 5, 6, 8, 9, and 10) "
                         + "of 'deform' must <= 100.0."
                     )
         if opt_key in [
@@ -795,31 +786,36 @@ def generate_woven_composite_sample(config_dict):
         )
     elif weave_type == "orthogonal":
         weave_config_dict = check_orthogonal_config_dict(config_dict)
-        create_orthogonal_sample(
-            weave_config_dict["unit_cell_weft_length"],
-            weave_config_dict["unit_cell_warp_length"],
-            weave_config_dict["unit_cell_thickness"],
-            weave_config_dict["weft_yarns_per_layer"],
-            weave_config_dict["warp_yarns_per_layer"],
-            weave_config_dict["number_of_yarn_layers"],
-            weave_config_dict["weft_width_to_spacing_ratio"],
-            weave_config_dict["weft_super_ellipse_power"],
-            weave_config_dict["warp_width_to_spacing_ratio"],
-            weave_config_dict["warp_super_ellipse_power"],
-            weave_config_dict["weft_to_warp_ratio"],
-            weave_config_dict["binder_width_to_spacing_ratio"],
-            weave_config_dict["binder_thickness_to_spacing_ratio"],
-            weave_config_dict["binder_super_ellipse_power"],
-            weave_config_dict["compaction"],
-            weave_config_dict["tiling"],
-            weave_config_dict["deform"],
-            weave_config_dict["internal_crimp"],
-            weave_config_dict["mesh_paths"][0],
-            weave_config_dict["mesh_paths"][1],
-            weave_config_dict["mesh_paths"][2],
-            weave_config_dict["mesh_paths"][3],
-            weave_config_dict["textile_resolution"],
-        )
+        try:
+            create_orthogonal_sample(
+                weave_config_dict["unit_cell_weft_length"],
+                weave_config_dict["unit_cell_warp_length"],
+                weave_config_dict["unit_cell_thickness"],
+                weave_config_dict["weft_yarns_per_layer"],
+                weave_config_dict["warp_yarns_per_layer"],
+                weave_config_dict["number_of_yarn_layers"],
+                weave_config_dict["weft_width_to_spacing_ratio"],
+                weave_config_dict["weft_super_ellipse_power"],
+                weave_config_dict["warp_width_to_spacing_ratio"],
+                weave_config_dict["warp_super_ellipse_power"],
+                weave_config_dict["weft_to_warp_ratio"],
+                weave_config_dict["binder_width_to_spacing_ratio"],
+                weave_config_dict["binder_thickness_to_spacing_ratio"],
+                weave_config_dict["binder_super_ellipse_power"],
+                weave_config_dict["compaction"],
+                weave_config_dict["tiling"],
+                weave_config_dict["deform"],
+                weave_config_dict["internal_crimp"],
+                weave_config_dict["mesh_paths"][0],
+                weave_config_dict["mesh_paths"][1],
+                weave_config_dict["mesh_paths"][2],
+                weave_config_dict["mesh_paths"][3],
+                weave_config_dict["textile_resolution"],
+            )
+        except ValueError:
+            sys.exit(
+                99
+            )  # We use this to not crash batch run if trimesh crashes
     else:
         raise NotImplementedError(
             "The weave type '" + str(weave_type) + "' is not available."

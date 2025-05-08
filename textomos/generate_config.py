@@ -273,7 +273,7 @@ def generate_orthogonal_geometry_config(**kwargs):
                                   compaction/dilation in any direction.
 
         deform_scaling (list(float)): Lower and upper bound for cross section
-                                      scaling deformation.
+                                      and super ellipse scaling deformation.
 
         deform_rotate (list(float)): Lower and upper bound for cross section
                                      rotation deformation.
@@ -288,6 +288,7 @@ def generate_orthogonal_geometry_config(**kwargs):
         sample_config_dict (dict): A dict of the generated geometry options.
     """
     sample_config_dict = {}
+    sample_config_dict["weave_type"] = kwargs["weave_type"]
     sample_config_dict["weft_yarns_per_layer"] = np.random.randint(
         kwargs["yarns_per_layer"][0], high=kwargs["yarns_per_layer"][1]
     )
