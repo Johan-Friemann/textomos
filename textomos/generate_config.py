@@ -218,6 +218,215 @@ def generate_layer2layer_geometry_config(**kwargs):
     return sample_config_dict
 
 
+def generate_orthogonal_geometry_config(**kwargs):
+    """Generate options pertaining the geometry (yarn size, shape, etc.) with
+    domain randomization.
+
+    Args:
+        -
+
+    Keyword args:
+        warp_width_to_spacing_ratio (list[float]): Lower and upper bound for
+                                                   warp width to spacing ratio.
+
+        weft_width_to_spacing_ratio (list[float]): Lower and upper bound for
+                                                   weft width to spacing ratio.
+
+        binder_width_to_spacing_ratio (list[float]): Lower and upper bound for
+                                                     binder width to spacing
+                                                     ratio.
+
+        weft_super_ellipse_power (list[float]): Lower and upper bound for base
+                                                weft super ellipse power.
+
+        warp_super_ellipse_power (list[float]): Lower and upper bound for base
+                                                warp super ellipse power.
+
+        binder_super_ellipse_power (list[float]): Lower and upper bound for base
+                                                  binder super ellipse power.
+
+
+        binder_thickness_to_spacing_ratio (list[float]): Lower and upper bound
+                                                         for binder thickness to
+                                                         spacing ratio.
+
+        weft_to_warp_ratio (list[float]): Lower and upper bound for weft to warp
+                                          ratio.
+
+        yarns_per_layer (list[int]): Lower and upper bound for weft/warp number
+                                     of yarns per layer.
+
+        number_of_yarn_layers (list[int]): Lower and upper bound for number of
+                                           yarn layers.
+
+        unit_cell_side_length (list[float]): Lower and upper bound for the side
+                                             length of unit cellin the yarn
+                                             plane.
+
+        unit_cell_thickness (list[float]): Lower and upper bound for unit cell
+                                           thickness.
+
+        tiling (list[int]): Lower and upper bound for number of unit cell
+                            repetitions in any direction.
+
+        compaction (list[float]): Lower and upper bound for for unit cell
+                                  compaction/dilation in any direction.
+
+        deform_scaling (list(float)): Lower and upper bound for cross section
+                                      and super ellipse scaling deformation.
+
+        deform_rotate (list(float)): Lower and upper bound for cross section
+                                     rotation deformation.
+
+        internal_crimp (float): Probability of  having crimp on the interior
+                                weft yarns. Should be between 0.0 and 1.0.
+
+        textile_resolution (int): Texgen mesh resolution.
+
+
+    Returns:
+        sample_config_dict (dict): A dict of the generated geometry options.
+    """
+    sample_config_dict = {}
+    sample_config_dict["weave_type"] = kwargs["weave_type"]
+    sample_config_dict["weft_yarns_per_layer"] = np.random.randint(
+        kwargs["yarns_per_layer"][0], high=kwargs["yarns_per_layer"][1]
+    )
+    sample_config_dict["warp_yarns_per_layer"] = np.random.randint(
+        kwargs["yarns_per_layer"][0], high=kwargs["yarns_per_layer"][1]
+    )
+    sample_config_dict["number_of_yarn_layers"] = np.random.randint(
+        kwargs["number_of_yarn_layers"][0],
+        high=kwargs["number_of_yarn_layers"][1],
+    )
+    sample_config_dict["weft_to_warp_ratio"] = kwargs["weft_to_warp_ratio"][
+        0
+    ] + np.random.rand() * (
+        kwargs["weft_to_warp_ratio"][1] - kwargs["weft_to_warp_ratio"][0]
+    )
+    sample_config_dict["weft_width_to_spacing_ratio"] = kwargs[
+        "weft_width_to_spacing_ratio"
+    ][0] + np.random.rand() * (
+        kwargs["weft_width_to_spacing_ratio"][1]
+        - kwargs["weft_width_to_spacing_ratio"][0]
+    )
+    sample_config_dict["warp_width_to_spacing_ratio"] = kwargs[
+        "warp_width_to_spacing_ratio"
+    ][0] + np.random.rand() * (
+        kwargs["warp_width_to_spacing_ratio"][1]
+        - kwargs["warp_width_to_spacing_ratio"][0]
+    )
+    sample_config_dict["binder_width_to_spacing_ratio"] = kwargs[
+        "binder_width_to_spacing_ratio"
+    ][0] + np.random.rand() * (
+        kwargs["binder_width_to_spacing_ratio"][1]
+        - kwargs["binder_width_to_spacing_ratio"][0]
+    )
+    sample_config_dict["weft_super_ellipse_power"] = kwargs[
+        "weft_super_ellipse_power"
+    ][0] + np.random.rand() * (
+        kwargs["weft_super_ellipse_power"][1]
+        - kwargs["weft_super_ellipse_power"][0]
+    )
+    sample_config_dict["warp_super_ellipse_power"] = kwargs[
+        "warp_super_ellipse_power"
+    ][0] + np.random.rand() * (
+        kwargs["warp_super_ellipse_power"][1]
+        - kwargs["warp_super_ellipse_power"][0]
+    )
+    sample_config_dict["binder_super_ellipse_power"] = kwargs[
+        "binder_super_ellipse_power"
+    ][0] + np.random.rand() * (
+        kwargs["binder_super_ellipse_power"][1]
+        - kwargs["binder_super_ellipse_power"][0]
+    )
+    sample_config_dict["weft_to_warp_ratio"] = kwargs["weft_to_warp_ratio"][
+        0
+    ] + np.random.rand() * (
+        kwargs["weft_to_warp_ratio"][1] - kwargs["weft_to_warp_ratio"][0]
+    )
+    sample_config_dict["binder_thickness_to_spacing_ratio"] = kwargs[
+        "binder_thickness_to_spacing_ratio"
+    ][0] + np.random.rand() * (
+        kwargs["binder_thickness_to_spacing_ratio"][1]
+        - kwargs["binder_thickness_to_spacing_ratio"][0]
+    )
+    sample_config_dict["unit_cell_weft_length"] = kwargs[
+        "unit_cell_side_length"
+    ][0] + np.random.rand() * (
+        kwargs["unit_cell_side_length"][1] - kwargs["unit_cell_side_length"][0]
+    )
+    sample_config_dict["unit_cell_warp_length"] = kwargs[
+        "unit_cell_side_length"
+    ][0] + np.random.rand() * (
+        kwargs["unit_cell_side_length"][1] - kwargs["unit_cell_side_length"][0]
+    )
+    sample_config_dict["unit_cell_thickness"] = kwargs["unit_cell_thickness"][
+        0
+    ] + np.random.rand() * (
+        kwargs["unit_cell_thickness"][1] - kwargs["unit_cell_thickness"][0]
+    )
+    sample_config_dict["tiling"] = [
+        np.random.randint(kwargs["tiling"][0], high=kwargs["tiling"][1]),
+        np.random.randint(kwargs["tiling"][0], high=kwargs["tiling"][1]),
+        np.random.randint(kwargs["tiling"][0], high=kwargs["tiling"][1]),
+    ]
+    sample_config_dict["deform"] = [
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_rotate"][0]
+        + np.random.rand()
+        * (kwargs["deform_rotate"][1] - kwargs["deform_rotate"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_rotate"][0]
+        + np.random.rand()
+        * (kwargs["deform_rotate"][1] - kwargs["deform_rotate"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_scaling"][0]
+        + np.random.rand()
+        * (kwargs["deform_scaling"][1] - kwargs["deform_scaling"][0]),
+        kwargs["deform_rotate"][0]
+        + np.random.rand()
+        * (kwargs["deform_rotate"][1] - kwargs["deform_rotate"][0]),
+    ]
+    sample_config_dict["internal_crimp"] = (
+        np.random.rand() < kwargs["internal_crimp"]
+    )
+    sample_config_dict["textile_resolution"] = kwargs["textile_resolution"]
+    sample_config_dict["compaction"] = [
+        kwargs["compaction"][0]
+        + np.random.rand()
+        * (kwargs["compaction"][1] - kwargs["compaction"][0]),
+        kwargs["compaction"][0]
+        + np.random.rand()
+        * (kwargs["compaction"][1] - kwargs["compaction"][0]),
+        kwargs["compaction"][0]
+        + np.random.rand()
+        * (kwargs["compaction"][1] - kwargs["compaction"][0]),
+    ]
+    return sample_config_dict
+
+
 def generate_attenuation_properties_config(**kwargs):
     """Generate options pertaining the attenuation properties of the generated
        sample's different phases. Specifically, phase densities and constituent
@@ -584,6 +793,17 @@ def generate_config(
             )
         config_dict["mesh_paths"] = mesh_paths
         config_dict.update(generate_layer2layer_geometry_config(**parameters))
+    elif parameters["weave_type"] == "orthogonal":
+        phases = ["weft", "warp", "binder", "matrix"]
+        mesh_paths = []
+        for phase in phases:
+            mesh_paths.append(
+                os.path.join(
+                    tex_ray_path, "meshes/" + phase + "_" + str(sim_id) + ".stl"
+                )
+            )
+        config_dict["mesh_paths"] = mesh_paths
+        config_dict.update(generate_orthogonal_geometry_config(**parameters))
 
     config_dict.update(generate_attenuation_properties_config(**parameters))
 

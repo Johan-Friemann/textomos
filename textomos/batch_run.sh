@@ -61,6 +61,7 @@ function clean_up {
     do
         rm -f /textomos/input/input_$i.json
         rm -f /textomos/meshes/weft_$i.stl
+        rm -f /textomos/meshes/binder_$i.stl
         rm -f /textomos/meshes/warp_$i.stl
         rm -f /textomos/meshes/matrix_$i.stl
         rm -f /textomos/reconstructions/reconstruction_$i.tiff
@@ -147,6 +148,7 @@ while : ; do
     do
         rm -f /textomos/input/input_$i.json
         rm -f /textomos/meshes/weft_$i.stl
+        rm -f /textomos/meshes/binder_$i.stl
         rm -f /textomos/meshes/warp_$i.stl
         rm -f /textomos/meshes/matrix_$i.stl
         rm -f /textomos/reconstructions/reconstruction_$i.tiff
