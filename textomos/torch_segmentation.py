@@ -29,7 +29,7 @@ from hdf5_utils import (
 )
 
 
-class TexRayDataset(Dataset):
+class TextomosDataset(Dataset):
     """See pytorch dataset class documentation for specifics of __method__
     type methods that are required by the dataset interface.
 
@@ -40,6 +40,8 @@ class TexRayDataset(Dataset):
         z_score (tuple(float, float)): Mean and standard deviation to use for
                                        z-score normalization. If either is None
                                        no normalization is performed.
+
+        num_phases (int): Number of material phases to be segmented.
     """
 
     def __init__(self, database_path, z_score=(None, None)):
@@ -54,6 +56,9 @@ class TexRayDataset(Dataset):
         self.slices_per_sample = detector_rows // binning
         self.num_samples, self.num_chunks, self.chunk_size = get_database_shape(
             self.database_path
+        )
+        self.num_phases = (  # + 1 since air is also a phase
+            len(get_metadata(database_path, 0, "phase_densities")) + 1
         )
 
         self.recon_data = []
@@ -98,9 +103,9 @@ class TexRayDataset(Dataset):
 
         seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
         seg_mask = torch.zeros(
-            (4, self.slices_per_sample, self.slices_per_sample)
+            (self.num_phases, self.slices_per_sample, self.slices_per_sample)
         )
-        for i in range(4):
+        for i in range(self.num_phases):
             seg_mask[i] = seg_slice == i
 
         return recon_slice, seg_mask
@@ -189,18 +194,19 @@ class TexRayDataset(Dataset):
             -
 
         Returns:
-            weights (torch tensor): A tensor of length 4 that contains the
+            weights (torch tensor): A tensor of length corresponding to the
+                                    number of phases that contains the
                                     frequency balancing weights. They are:
-                                    given as [air, matrix, weft, warp].
+                                    given as [air, phase_1, ..., phase_n].
         """
-        class_freq = torch.tensor([0, 0, 0, 0]).to(device)
+        class_freq = torch.zeros(self.num_phases).to(device)
         for global_idx in range(self.num_samples):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
             seg_sample = torch.tensor(
                 self.seg_data[chunk_idx][local_idx][:]
             ).to(device)
-            for i in range(4):
+            for i in range(self.num_phases):
                 class_freq[i] += torch.sum(seg_sample == i)
         median = torch.median(class_freq)
         return median / class_freq
@@ -363,10 +369,13 @@ def seed_all(rng_seed):
 
 
 def build_model(
-    model="deeplabv3_resnet50", input_channels=1, pre_trained=False
+    model="deeplabv3_resnet50",
+    input_channels=1,
+    output_channels=4,
+    pre_trained=False,
 ):
     """Build the segmentation model. The model is adapted to use for segmenting
-       images into 4 distinct classes.
+       images into n distinct classes.
 
     Args:
         -
@@ -439,9 +448,12 @@ def build_model(
     ]:
         last_layer_input_size = 256
 
-    # Replace output such that there are 4 classes to classify.
+    # Replace output such that there are n classes to classify.
     segmentation_model.classifier[4] = nn.Conv2d(
-        last_layer_input_size, 4, kernel_size=(1, 1), stride=(1, 1)
+        last_layer_input_size,
+        output_channels,
+        kernel_size=(1, 1),
+        stride=(1, 1),
     )
 
     return segmentation_model
@@ -1020,13 +1032,13 @@ if __name__ == "__main__":
     writer = SummaryWriter(flush_secs=1)
 
     if train:
-        training_set = TexRayDataset(
+        training_set = TextomosDataset(
             training_data_path, z_score=(data_mean, data_std)
         )
-        validation_set = TexRayDataset(
+        validation_set = TextomosDataset(
             validation_data_path, z_score=(data_mean, data_std)
         )
-        testing_set = TexRayDataset(
+        testing_set = TextomosDataset(
             testing_data_path, z_score=(data_mean, data_std)
         )
         weight = torch.tensor(data_weight).to(device)
