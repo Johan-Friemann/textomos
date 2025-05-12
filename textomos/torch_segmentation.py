@@ -1,9 +1,11 @@
 import random
 import itertools
+import collections
 import tifffile
 import numpy
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import Dataset, DataLoader, Subset
@@ -29,27 +31,15 @@ from hdf5_utils import (
 )
 
 
-class TextomosDataset(Dataset):
-    """See pytorch dataset class documentation for specifics of __method__
-    type methods that are required by the dataset interface.
-
-    Params:
-        database_path (str): The absolute path to the database folder.
-
-    Keyword params:
-        z_score (tuple(float, float)): Mean and standard deviation to use for
-                                       z-score normalization. If either is None
-                                       no normalization is performed.
-
-        num_phases (int): Number of material phases to be segmented.
+class TextomosDatasetBase(Dataset):
+    """A base class containing utility functions for dataset loading and
+    metrics.
     """
 
-    def __init__(self, database_path, z_score=(None, None)):
+    def __init__(self, database_path, z_score):
         self.database_path = database_path
-
         self.mean = z_score[0]
         self.std = z_score[1]
-
         # data_0 is guaranteed to exist
         detector_rows = get_metadata(database_path, 0, "detector_rows")
         binning = get_metadata(database_path, 0, "binning")
@@ -60,55 +50,6 @@ class TextomosDataset(Dataset):
         self.num_phases = (  # + 1 since air is also a phase
             len(get_metadata(database_path, 0, "phase_densities")) + 1
         )
-
-        self.recon_data = []
-        self.seg_data = []
-        for i in range(self.num_chunks):
-            recon_file_handle = get_reconstruction_chunk_handle(
-                self.database_path, i
-            )
-            self.recon_data.append([])
-            seg_file_handle = get_segmentation_chunk_handle(
-                self.database_path, i
-            )
-            self.seg_data.append([])
-            for j in range(self.chunk_size):
-                recon_data_handle = recon_file_handle.get(
-                    "reconstruction_" + str(j)
-                )
-                if recon_data_handle is not None:
-                    self.recon_data[i].append(recon_data_handle)
-                seg_data_handle = seg_file_handle.get("segmentation_" + str(j))
-                if seg_data_handle is not None:
-                    self.seg_data[i].append(seg_data_handle)
-
-    def __len__(self):
-        return self.num_samples * self.slices_per_sample
-
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        global_idx = idx // self.slices_per_sample
-        chunk_idx = global_idx // self.chunk_size
-        local_idx = global_idx % self.chunk_size
-        slice_idx = idx % self.slices_per_sample
-
-        # Unsqueeze to create a channel axis for consistency.
-        recon_slice = torch.tensor(
-            self.recon_data[chunk_idx][local_idx][slice_idx]
-        ).unsqueeze(0)
-        if (not self.mean is None) and (not self.std is None):
-            recon_slice = (recon_slice - self.mean) / self.std
-
-        seg_slice = torch.tensor(self.seg_data[chunk_idx][local_idx][slice_idx])
-        seg_mask = torch.zeros(
-            (self.num_phases, self.slices_per_sample, self.slices_per_sample)
-        )
-        for i in range(self.num_phases):
-            seg_mask[i] = seg_slice == i
-
-        return recon_slice, seg_mask
 
     def compute_min_max(self, device):
         """Compute the dataset min max normalization statistics. This is very
@@ -212,7 +153,191 @@ class TextomosDataset(Dataset):
         return median / class_freq
 
 
-class TIFFDataset(Dataset):
+class TextomosDataset2D(TextomosDatasetBase):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        database_path (str): The absolute path to the database folder.
+
+    Keyword params:
+        z_score (tuple(float, float)): Mean and standard deviation to use for
+                                       z-score normalization. If either is None
+                                       no normalization is performed.
+    """
+
+    def __init__(self, database_path, z_score=(None, None)):
+        super().__init__(database_path, z_score)
+
+    def __len__(self):
+        return self.num_samples * self.slices_per_sample
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        global_idx = idx // self.slices_per_sample
+        chunk_idx = global_idx // self.chunk_size
+        local_idx = global_idx % self.chunk_size
+        slice_idx = idx % self.slices_per_sample
+
+        recon = get_reconstruction_chunk_handle(
+            self.database_path, chunk_idx
+        ).get("reconstruction_" + str(local_idx))
+
+        # Unsqueeze to create a channel axis for consistency.
+        recon_slice = torch.tensor(recon[slice_idx]).unsqueeze(0)
+        if (not self.mean is None) and (not self.std is None):
+            recon_slice = (recon_slice - self.mean) / self.std
+
+        seg = get_segmentation_chunk_handle(self.database_path, chunk_idx).get(
+            "segmentation_" + str(local_idx)
+        )
+        seg_slice = torch.tensor(seg[slice_idx])
+        seg_mask = torch.zeros(
+            (
+                self.num_phases,
+                self.slices_per_sample,
+                self.slices_per_sample,
+            )
+        )
+        for i in range(self.num_phases):
+            seg_mask[i] = seg_slice == i
+
+        return recon_slice, seg_mask
+
+
+class TextomosDataset3D(TextomosDatasetBase):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        database_path (str): The absolute path to the database folder.
+
+        patch_size (int): The side length of the cubic patch of the volume
+                          used as input.
+
+        stride (int): The stride between input patches. If equal to patch_size
+                      there will be no overlap or skipped voxels.
+
+
+    Keyword params:
+        z_score (tuple(float, float)): Mean and standard deviation to use for
+                                       z-score normalization. If either is None
+                                       no normalization is performed.
+
+    """
+
+    def __init__(self, database_path, patch_size, stride, z_score=(None, None)):
+        super().__init__(database_path, z_score)
+        self.patch_size = patch_size
+        self.stride = stride
+
+        patch_indices = []
+        for sample_idx in range(self.num_samples):
+            for i in range(
+                0, self.slices_per_sample - self.patch_size + 1, stride
+            ):
+                for j in range(
+                    0, self.slices_per_sample - self.patch_size + 1, stride
+                ):
+                    for k in range(
+                        0, self.slices_per_sample - self.patch_size + 1, stride
+                    ):
+                        patch_indices.append((sample_idx, i, j, k))
+        self.patch_indices = numpy.array(patch_indices)
+
+    def __len__(self):
+        return (
+            self.num_samples
+            * ((self.slices_per_sample - self.patch_size) // self.stride + 1)
+            ** 3
+        )
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        global_idx = self.patch_indices[idx][0]
+        chunk_idx = global_idx // self.chunk_size
+        local_idx = global_idx % self.chunk_size
+
+        # Unsqueeze to create a channel axis for consistency.
+        recon = get_reconstruction_chunk_handle(
+            self.database_path, chunk_idx
+        ).get("reconstruction_" + str(local_idx))
+        recon_patch = torch.tensor(
+            recon[
+                self.patch_indices[idx][1] : self.patch_indices[idx][1]
+                + self.patch_size,
+                self.patch_indices[idx][2] : self.patch_indices[idx][2]
+                + self.patch_size,
+                self.patch_indices[idx][3] : self.patch_indices[idx][3]
+                + self.patch_size,
+            ]
+        ).unsqueeze(0)
+        if (not self.mean is None) and (not self.std is None):
+            recon_patch = (recon_patch - self.mean) / self.std
+        seg = get_segmentation_chunk_handle(self.database_path, chunk_idx).get(
+            "segmentation_" + str(local_idx)
+        )
+        seg_patch = torch.tensor(
+            seg[
+                self.patch_indices[idx][1] : self.patch_indices[idx][1]
+                + self.patch_size,
+                self.patch_indices[idx][2] : self.patch_indices[idx][2]
+                + self.patch_size,
+                self.patch_indices[idx][3] : self.patch_indices[idx][3]
+                + self.patch_size,
+            ]
+        )
+        seg_mask = torch.zeros(
+            (self.num_phases, self.patch_size, self.patch_size, self.patch_size)
+        )
+        for i in range(self.num_phases):
+            seg_mask[i] = seg_patch == i
+
+        return recon_patch, seg_mask
+
+
+class TiffDatasetBase(Dataset):
+    """A base class containing dataset loader."""
+
+    def __init__(
+        self, tiff_path, z_score, cutoff, slice_axis, ground_truth_path
+    ):
+        self.tiff_path = tiff_path
+
+        self.mean = z_score[0]
+        self.std = z_score[1]
+        self.min_val = cutoff[0]
+        self.max_val = cutoff[1]
+
+        self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
+        self.slices_per_sample = self.reconstruction.shape[0]
+        if slice_axis == "x":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 2)
+            self.reconstruction = torch.transpose(self.reconstruction, 1, 2)
+        elif slice_axis == "y":
+            self.reconstruction = torch.transpose(self.reconstruction, 0, 1)
+        elif slice_axis != "z":
+            raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+        self.segmentation = None
+        self.num_phases = None
+        if not ground_truth_path is None:
+            self.segmentation = torch.tensor(tifffile.imread(ground_truth_path))
+            self.num_phases = torch.max(self.segmentation).item() + 1
+            if slice_axis == "x":
+                self.segmentation = torch.transpose(self.segmentation, 0, 2)
+                self.segmentation = torch.transpose(self.segmentation, 1, 2)
+            elif slice_axis == "y":
+                self.segmentation = torch.transpose(self.segmentation, 0, 1)
+            elif slice_axis != "z":
+                raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+
+class TIFFDataset2D(TiffDatasetBase):
     """See pytorch dataset class documentation for specifics of __method__
     type methods that are required by the dataset interface.
 
@@ -244,32 +369,9 @@ class TIFFDataset(Dataset):
         z_score=(None, None),
         cutoff=(-1.0, 1.0),
     ):
-        self.tiff_path = tiff_path
-
-        self.mean = z_score[0]
-        self.std = z_score[1]
-        self.min_val = cutoff[0]
-        self.max_val = cutoff[1]
-
-        self.reconstruction = torch.tensor(tifffile.imread(tiff_path))
-        if slice_axis == "x":
-            self.reconstruction = torch.transpose(self.reconstruction, 0, 2)
-            self.reconstruction = torch.transpose(self.reconstruction, 1, 2)
-        elif slice_axis == "y":
-            self.reconstruction = torch.transpose(self.reconstruction, 0, 1)
-        elif slice_axis != "z":
-            raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
-
-        self.segmentation = None
-        if not ground_truth_path is None:
-            self.segmentation = torch.tensor(tifffile.imread(ground_truth_path))
-            if slice_axis == "x":
-                self.segmentation = torch.transpose(self.segmentation, 0, 2)
-                self.segmentation = torch.transpose(self.segmentation, 1, 2)
-            elif slice_axis == "y":
-                self.segmentation = torch.transpose(self.segmentation, 0, 1)
-            elif slice_axis != "z":
-                raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+        super().__init__(
+            tiff_path, z_score, cutoff, slice_axis, ground_truth_path
+        )
 
     def __len__(self):
         return self.reconstruction.shape[0]
@@ -298,6 +400,112 @@ class TIFFDataset(Dataset):
                 seg_mask[i] = seg_slice == i
 
         return recon_slice, seg_mask
+
+
+class TIFFDataset3D(TiffDatasetBase):
+    """See pytorch dataset class documentation for specifics of __method__
+    type methods that are required by the dataset interface.
+
+    Params:
+        tiff_path (str): The absolute path to the tiff-file.
+
+        patch_size (int): The side length of the cubic patch of the volume
+                          used as input.
+
+        stride (int): The stride between input patches. If equal to patch_size
+                      there will be no overlap or skipped voxels.
+
+    Keyword params:
+        ground_truth_path (str): The path to ground truth data if available.
+
+        z_score (tuple(float, float)): Mean and standard deviation to use for
+                                       z-score normalization. If either is None
+                                       no normalization is performed.
+
+        cutoff (tuple(float, float)): Lower and upper cutoff values. Sets
+                                      values in reconstruction slices to
+                                      cutoff[0] if lower than cutofff[0] and
+                                      sets values to cutoff[1] if larger
+                                      than cutoff[1]. If an entry is 'None',
+                                      that bound is skipped.
+    """
+
+    def __init__(
+        self,
+        tiff_path,
+        patch_size,
+        stride,
+        slice_axis="x",
+        ground_truth_path=None,
+        z_score=(None, None),
+        cutoff=(-1.0, 1.0),
+    ):
+        super().__init__(
+            tiff_path, z_score, cutoff, slice_axis, ground_truth_path
+        )
+        self.patch_size = patch_size
+        self.stride = stride
+
+        patch_indices = []
+        for i in range(0, self.slices_per_sample - self.patch_size + 1, stride):
+            for j in range(
+                0, self.slices_per_sample - self.patch_size + 1, stride
+            ):
+                for k in range(
+                    0, self.slices_per_sample - self.patch_size + 1, stride
+                ):
+                    patch_indices.append((i, j, k))
+        self.patch_indices = numpy.array(patch_indices)
+
+    def __len__(self):
+        return (
+            (self.slices_per_sample - self.patch_size) // self.stride + 1
+        ) ** 3
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        recon_patch = self.reconstruction[
+            self.patch_indices[idx][0] : self.patch_indices[idx][0]
+            + self.patch_size,
+            self.patch_indices[idx][1] : self.patch_indices[idx][1]
+            + self.patch_size,
+            self.patch_indices[idx][2] : self.patch_indices[idx][2]
+            + self.patch_size,
+        ].unsqueeze(0)
+
+        if not self.min_val is None:
+            recon_patch[recon_patch < self.min_val] = self.min_val
+
+        if not self.max_val is None:
+            recon_patch[recon_patch > self.max_val] = self.max_val
+
+        if (not self.mean is None) and (not self.std is None):
+            recon_patch = (recon_patch - self.mean) / self.std
+
+        seg_mask = []
+        if not self.segmentation is None:
+            seg_patch = self.segmentation[
+                self.patch_indices[idx][0] : self.patch_indices[idx][0]
+                + self.patch_size,
+                self.patch_indices[idx][1] : self.patch_indices[idx][1]
+                + self.patch_size,
+                self.patch_indices[idx][2] : self.patch_indices[idx][2]
+                + self.patch_size,
+            ]
+            seg_mask = torch.zeros(
+                (
+                    self.num_phases,
+                    self.patch_size,
+                    self.patch_size,
+                    self.patch_size,
+                )
+            )
+            for i in range(self.num_phases):
+                seg_mask[i] = seg_patch == i
+
+        return recon_patch, seg_mask
 
 
 class JaccardLoss(nn.Module):
@@ -715,7 +923,11 @@ def one_epoch(
 
             optimizer.zero_grad()
             with torch.set_grad_enabled(mode == "training"):
-                outputs = model(inputs)["out"]
+                outputs = model(inputs)
+                # Handle pytorch model.
+                if type(outputs) is collections.OrderedDict:  #
+                    outputs = outputs["out"]
+
                 loss = criterion(outputs, labels)
                 if mode == "training":
                     loss.backward()
@@ -907,8 +1119,8 @@ def segment_slice_from_dataloader(model, dataloader, slice_idx):
     return input, prediction
 
 
-def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
-    """Use model to segment slice with index slice_idx from dataloader.
+def segment_volume_from_slice_dataloader(model, dataloader, slice_axis="x"):
+    """Use model to segment volume slice by slice from dataloader.
 
     Args:
         model (torch model): The model to utilize.
@@ -933,11 +1145,83 @@ def segment_volume_from_dataloader(model, dataloader, slice_axis="x"):
     segmented_volume = segmented_volume.to(device)
     iterator = iter(dataloader)
     for slice_idx, input in enumerate(iterator):
-        if type(input) is list:  # Handle TIFFDataset vs TexRayDataset.
-            input = input[0]
+        input = input[0]  # Extract recon only
         input = input.to(device)
-        prediction = model(input)["out"].argmax(1)
+        prediction = model(input)
+        if type(prediction) is collections.OrderedDict:  # Handle pytorch model.
+            prediction = prediction["out"]
+        prediction = prediction.argmax(1)
         segmented_volume[slice_idx] = prediction
+
+    # We need to permute our axes back to match original tiff-file.
+    if slice_axis == "x":
+        segmented_volume = torch.transpose(segmented_volume, 1, 2)
+        segmented_volume = torch.transpose(segmented_volume, 0, 2)
+    elif slice_axis == "y":
+        segmented_volume = torch.transpose(segmented_volume, 0, 1)
+    elif slice_axis != "z":
+        raise ValueError("slice_axis can only be 'x', 'y', or 'z'.")
+
+    return segmented_volume
+
+
+def segment_volume_from_patch_dataloader(
+    model, dataloader, patch_size, stride, slice_axis="x", volume_shape=512
+):
+    """Use model to segment volume patch by patch from dataloader.
+
+    Args:
+        model (torch model): The model to utilize.
+
+        dataloader (torch dataloader):  The dataloader from which the volume
+                                        to be segmented is loaded.
+
+        patch_size (int): The side length of the cubic patch of the volume
+                          used as input.
+
+        stride (int): The stride between input patches. If equal to patch_size
+                      there will be no overlap or skipped voxels.
+
+
+    Keyword args:
+        volume_shape (int): The side length of the volume to segment.
+
+        slice_axis (str): The axis that was had the first index in the array
+                          during model training.
+
+    Returns:
+
+        segmented_volume (torch tensor): A tensor of size len(dataloader) ^ 3
+                                         that contains the segmented volume.
+
+    """
+    device = next(model.parameters()).device
+
+    segmented_volume = torch.zeros(
+        (volume_shape, volume_shape, volume_shape), dtype=torch.uint8
+    )
+    segmented_volume = segmented_volume.to(device)
+    iterator = iter(dataloader)
+
+    patch_indices = []
+    for i in range(0, volume_shape - patch_size + 1, stride):
+        for j in range(0, volume_shape - patch_size + 1, stride):
+            for k in range(0, volume_shape - patch_size + 1, stride):
+                patch_indices.append((i, j, k))
+    patch_indices = numpy.array(patch_indices)
+
+    for idx, input in enumerate(iterator):
+        input = input[0]  # Extract recon only
+        input = input.to(device)
+        prediction = model(input)
+        if type(prediction) is collections.OrderedDict:  # Handle pytorch model.
+            prediction = prediction["out"]
+        prediction = prediction.argmax(1)
+        segmented_volume[
+            patch_indices[idx][0] : patch_indices[idx][0] + patch_size,
+            patch_indices[idx][1] : patch_indices[idx][1] + patch_size,
+            patch_indices[idx][2] : patch_indices[idx][2] + patch_size,
+        ] = prediction
 
     # We need to permute our axes back to match original tiff-file.
     if slice_axis == "x":
@@ -1032,13 +1316,13 @@ if __name__ == "__main__":
     writer = SummaryWriter(flush_secs=1)
 
     if train:
-        training_set = TextomosDataset(
+        training_set = TextomosDataset2D(
             training_data_path, z_score=(data_mean, data_std)
         )
-        validation_set = TextomosDataset(
+        validation_set = TextomosDataset2D(
             validation_data_path, z_score=(data_mean, data_std)
         )
-        testing_set = TextomosDataset(
+        testing_set = TextomosDataset2D(
             testing_data_path, z_score=(data_mean, data_std)
         )
         weight = torch.tensor(data_weight).to(device)
@@ -1059,6 +1343,8 @@ if __name__ == "__main__":
         )
         scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
+            1.0,
+            0.0,
             len(training_set) // batch_size,
         )
 
@@ -1077,7 +1363,7 @@ if __name__ == "__main__":
     if inference:
         model.load_state_dict(torch.load(state_dict_path))
         model.eval()
-        test_set = TIFFDataset(
+        test_set = TIFFDataset2D(
             inferenece_input_path,
             z_score=(data_mean, data_std),
             cutoff=(0.0, 1.0),
@@ -1085,6 +1371,6 @@ if __name__ == "__main__":
         test_loader = DataLoader(
             test_set, batch_size=1, shuffle=False, num_workers=1
         )
-        volume = segment_volume_from_dataloader(model, test_loader)
+        volume = segment_volume_from_slice_dataloader(model, test_loader)
         volume = volume.cpu().numpy()
         tifffile.imwrite(inferenece_output_path, volume)
