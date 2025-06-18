@@ -1,5 +1,6 @@
 import numpy as np
 import cupy as cp
+import pickle as pk
 import meshio
 from scipy.spatial.transform import Rotation as R
 
@@ -163,6 +164,109 @@ def check_segmentation_config_dict(config_dict):
     return dict(zip(req_keys + opt_keys, args))
 
 
+def bresenham3D(volume, start, end, value):
+    """Modifies an 3D volume by drawing a line from start to end using the
+       Bresenham 3D algorithm. Sets each voxel along the line to value.
+
+    Args:
+        volume (numpy array[int]): An n by n by n numpy array to be modified.
+
+        start (numpy array[int]): A numpy array of length 3 representing the
+                                  voxel coordinate to where to start drawing
+                                  the line (from).
+
+        end (numpy array[int]): A numpy array of length 3 representing the
+                                  voxel coordinate to where to end drawing
+                                  the line (to).
+
+        value (int): The value to set the modified voxels to.
+
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
+    z1, y1, x1 = start
+    z2, y2, x2 = end
+
+    dx = abs(x2 - x1)
+    dy = abs(y2 - y1)
+    dz = abs(z2 - z1)
+
+    xs = 1 if x2 > x1 else -1
+    ys = 1 if y2 > y1 else -1
+    zs = 1 if z2 > z1 else -1
+
+    if dx >= dy and dx >= dz:
+        p1 = 2 * dy - dx
+        p2 = 2 * dz - dx
+        while x1 != x2:
+            if (
+                0 <= x1 < volume.shape[0]
+                and 0 <= y1 < volume.shape[1]
+                and 0 <= z1 < volume.shape[2]
+            ):
+                volume[x1, y1, z1] = value
+            x1 += xs
+            if p1 >= 0:
+                y1 += ys
+                p1 -= 2 * dx
+            if p2 >= 0:
+                z1 += zs
+                p2 -= 2 * dx
+            p1 += 2 * dy
+            p2 += 2 * dz
+
+    elif dy >= dx and dy >= dz:
+        p1 = 2 * dx - dy
+        p2 = 2 * dz - dy
+        while y1 != y2:
+            if (
+                0 <= x1 < volume.shape[0]
+                and 0 <= y1 < volume.shape[1]
+                and 0 <= z1 < volume.shape[2]
+            ):
+                volume[x1, y1, z1] = value
+            y1 += ys
+            if p1 >= 0:
+                x1 += xs
+                p1 -= 2 * dy
+            if p2 >= 0:
+                z1 += zs
+                p2 -= 2 * dy
+            p1 += 2 * dx
+            p2 += 2 * dz
+
+    else:
+        p1 = 2 * dy - dz
+        p2 = 2 * dx - dz
+        while z1 != z2:
+            if (
+                0 <= x1 < volume.shape[0]
+                and 0 <= y1 < volume.shape[1]
+                and 0 <= z1 < volume.shape[2]
+            ):
+                volume[x1, y1, z1] = value
+            z1 += zs
+            if p1 >= 0:
+                y1 += ys
+                p1 -= 2 * dz
+            if p2 >= 0:
+                x1 += xs
+                p2 -= 2 * dz
+            p1 += 2 * dy
+            p2 += 2 * dx
+
+    if (
+        0 <= x2 < volume.shape[0]
+        and 0 <= y2 < volume.shape[1]
+        and 0 <= z2 < volume.shape[2]
+    ):
+        volume[x2, y2, z2] = value
+
+
 def segment_reconstruction(config_dict):
     """Label the reconstructed volume of a virtual x-ray tomographic scan.
        The scanned meshes are voxelized in the same reference frame as the
@@ -235,6 +339,7 @@ def segment_reconstruction(config_dict):
 
     triangles = []
     num_triangles = []
+    phase_center_lines = []
     for path in segmentation_config_dict["mesh_paths"]:
         mesh = meshio.read(path)
         vertex_coords = mesh.points
@@ -244,6 +349,11 @@ def segment_reconstruction(config_dict):
         )
         triangles.append(triangle)
         num_triangles.append(len(triangle) // 3)
+        try:
+            with open(path.replace(".stl", ".pkl"), "rb") as file:
+                phase_center_lines.append(pk.load(file))
+        except FileNotFoundError:
+            continue  # We skip matrix without having to check a bunch this way.
 
     vox = cp.zeros(num_voxels * num_voxels * num_voxels, dtype=cp.int32)
     # Flags are powers of 2: 1, 2, 4, ... one for each phase (excluding air).
@@ -277,4 +387,22 @@ def segment_reconstruction(config_dict):
         vox >>= 1
 
     out = out.reshape(num_voxels, num_voxels, num_voxels)
+
+    for phase, center_lines in enumerate(phase_center_lines):
+        for center_line in center_lines:
+            rotated_center_line = rot.apply(center_line * sample_scale_factor)
+            tilted_center_line = rot_tilt.apply(rotated_center_line)
+            offset_center_line = tilted_center_line + offset
+            # Inverse of logic in voxelizationKernel.cu lines 57 or 61
+            voxelized_yarn_path = (
+                np.rint(offset_center_line / voxel_size + num_voxels /2 - 0.5)
+            )
+            for idx in range(len(voxelized_yarn_path) - 1):
+                bresenham3D(
+                    out,
+                    voxelized_yarn_path[idx],
+                    voxelized_yarn_path[idx + 1],
+                    phase + len(segmentation_config_dict["mesh_paths"]) + 1,
+                )
+
     return out.get().astype(np.uint8)

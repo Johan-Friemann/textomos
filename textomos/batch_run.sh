@@ -63,6 +63,9 @@ function clean_up {
         rm -f /textomos/meshes/weft_$i.stl
         rm -f /textomos/meshes/binder_$i.stl
         rm -f /textomos/meshes/warp_$i.stl
+        rm -f /textomos/meshes/weft_$i.pkl
+        rm -f /textomos/meshes/binder_$i.pkl
+        rm -f /textomos/meshes/warp_$i.pkl
         rm -f /textomos/meshes/matrix_$i.stl
         rm -f /textomos/reconstructions/reconstruction_$i.tiff
         rm -f /textomos/segmentations/segmentation_$i.tiff
