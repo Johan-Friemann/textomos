@@ -1,5 +1,6 @@
 import sys
 import json
+import pickle as pk
 import pymeshlab as pml
 import numpy as np
 from numpy.random import rand
@@ -473,7 +474,19 @@ def create_layer2layer_sample(
     Returns:
         Weft (CTextile): A TexGen object that describes the weft yarns.
 
+        weft_center_lines (list[numpy array(float)]):
+                                    A list of numpy arrays representing the
+                                    coordinates of weft yarn center line points.
+                                    The arrays have num of node rows and 3
+                                    columns.
+
         Warp (CTextile): A TexGen object that describes the warp yarns.
+
+        warp_center_lines (list[numpy array(float)]):
+                                    A list of numpy arrays representing the
+                                    coordinates of weft yarn center line points.
+                                    The arrays have num of node rows and 3
+                                    columns.
     """
     x_yarn_spacing = cell_y_size / num_weft
     y_yarn_spacing = cell_x_size / num_warp
@@ -541,8 +554,10 @@ def create_layer2layer_sample(
 
     DomainPlanes = CDomainPlanes(Min, XYZ(Max.x, Max.y, baseline + offset))
     Weft = CTextile()
+    weft_center_lines = []
     Weft.AssignDomain(DomainPlanes)
     Warp = CTextile()
+    warp_center_lines = []
     Warp.AssignDomain(DomainPlanes)
 
     for i in range(LayeredTextile.GetNumYarns()):
@@ -600,13 +615,45 @@ def create_layer2layer_sample(
                         )
                     )
                 InterpNode.ReplaceSection(j, modified_section)
+        # Due to how texgen handles domains and mesh clipping, we need to shift
+        # points by the domain side length if we are outside the domain.
+        # The paths must then be sorted by the dominant direction to not cause
+        # issues with line tracing later.
+        yarn_center_line = []
+        SNodes = Yarn.GetSlaveNodes(Yarn.LINE)
+        for node in SNodes:
+            pos = node.GetPosition()
+            X = pos.x
+            Y = pos.y
+            Z = pos.z
+            if X < Min.x:
+                X += Max.x - Min.x
+            elif X > Max.x:
+                X -= Max.x - Min.x
 
+            if Y < Min.y:
+                Y += Max.y - Min.y
+            elif Y > Max.y:
+                Y -= Max.y - Min.y
+
+            if Z < Min.z:
+                Z += baseline + offset - Min.z
+            elif Z > baseline + offset:
+                Z -= baseline + offset - Min.z
+            yarn_center_line.append([X, Y, Z])
+        yarn_center_line = np.array(yarn_center_line)
         if idx == 0:
+            weft_center_lines.append(
+                yarn_center_line[yarn_center_line[:, 0].argsort()]
+            )
             Weft.AddYarn(Yarn)
         else:
+            warp_center_lines.append(
+                yarn_center_line[yarn_center_line[:, 1].argsort()]
+            )
             Warp.AddYarn(Yarn)
 
-    return Weft, Warp
+    return Weft, weft_center_lines, Warp, warp_center_lines
 
 
 def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
@@ -699,7 +746,7 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
         -
 
     Returns:
-        -
+        shift (numpy array(float)): The coordinate shift.
     """
     # We know that the matrix is the bounding box, so we use it to compute
     # the barycenter.
@@ -724,12 +771,13 @@ def set_origin_to_barycenter(weft_path, warp_path, matrix_path):
         traslmethod="Set new Origin", neworigin=barycenter
     )
     mesh_set.save_current_mesh(warp_path)
-    return None
+    return barycenter
 
 
 def generate_woven_composite_sample(config_dict):
     """Generate a woven composite sample and create a mesh for weft yarns,
-    warp yarns, and matrix respectively.
+       warp yarns, and matrix respectively. Will also save the yarn center line
+       nodal coordinates as a list of numpy arrays (one array per yarn).
 
     Users are expected to interact with this function only and not use any
     of the internals directly.
@@ -749,21 +797,23 @@ def generate_woven_composite_sample(config_dict):
     if weave_type == "layer2layer":
         weave_config_dict = check_layer2layer_config_dict(config_dict)
 
-        Weft, Warp = create_layer2layer_sample(
-            weave_config_dict["unit_cell_weft_length"],
-            weave_config_dict["unit_cell_warp_length"],
-            weave_config_dict["unit_cell_thickness"],
-            weave_config_dict["weft_yarns_per_layer"],
-            weave_config_dict["warp_yarns_per_layer"],
-            weave_config_dict["number_of_yarn_layers"],
-            weave_config_dict["weft_width_to_spacing_ratio"],
-            weave_config_dict["warp_width_to_spacing_ratio"],
-            weave_config_dict["weft_to_warp_ratio"],
-            weave_config_dict["weave_pattern"],
-            weave_config_dict["tiling"],
-            weave_config_dict["deform"],
-            weave_config_dict["shift_unit_cell"],
-            weave_config_dict["textile_resolution"],
+        Weft, weft_center_lines, Warp, warp_center_lines = (
+            create_layer2layer_sample(
+                weave_config_dict["unit_cell_weft_length"],
+                weave_config_dict["unit_cell_warp_length"],
+                weave_config_dict["unit_cell_thickness"],
+                weave_config_dict["weft_yarns_per_layer"],
+                weave_config_dict["warp_yarns_per_layer"],
+                weave_config_dict["number_of_yarn_layers"],
+                weave_config_dict["weft_width_to_spacing_ratio"],
+                weave_config_dict["warp_width_to_spacing_ratio"],
+                weave_config_dict["weft_to_warp_ratio"],
+                weave_config_dict["weave_pattern"],
+                weave_config_dict["tiling"],
+                weave_config_dict["deform"],
+                weave_config_dict["shift_unit_cell"],
+                weave_config_dict["textile_resolution"],
+            )
         )
         write_weave_mesh(
             Weft,
@@ -779,11 +829,24 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["cut_mesh"],
         )
 
-        set_origin_to_barycenter(
+        shift = set_origin_to_barycenter(
             weave_config_dict["mesh_paths"][0],
             weave_config_dict["mesh_paths"][1],
             weave_config_dict["mesh_paths"][2],
         )
+        for idx in range(len(weft_center_lines)):
+            weft_center_lines[idx] = weft_center_lines[idx] - shift
+        for idx in range(len(warp_center_lines)):
+            warp_center_lines[idx] = warp_center_lines[idx] - shift
+        with open(
+            weave_config_dict["mesh_paths"][0].replace(".stl", ".pkl"), "wb"
+        ) as file:
+            pk.dump(weft_center_lines, file)
+        with open(
+            weave_config_dict["mesh_paths"][1].replace(".stl", ".pkl"), "wb"
+        ) as file:
+            pk.dump(warp_center_lines, file)
+
     elif weave_type == "orthogonal":
         weave_config_dict = check_orthogonal_config_dict(config_dict)
         try:
