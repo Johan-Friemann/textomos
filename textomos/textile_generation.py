@@ -474,19 +474,19 @@ def create_layer2layer_sample(
     Returns:
         Weft (CTextile): A TexGen object that describes the weft yarns.
 
-        weft_paths (list[numpy array(float)]): A list of numpy arrays
-                                               representing the
-                                               coordinates of weft yarn center
-                                               line points. The arrays have
-                                               num of node rows and 3 columns.
+        weft_center_lines (list[numpy array(float)]):
+                                    A list of numpy arrays representing the
+                                    coordinates of weft yarn center line points.
+                                    The arrays have num of node rows and 3
+                                    columns.
 
         Warp (CTextile): A TexGen object that describes the warp yarns.
 
-        warp_paths (list[numpy array(float)]): A list of numpy arrays
-                                               representing the
-                                               coordinates of warp yarn center
-                                               line points. The arrays have
-                                               num of node rows and 3 columns.
+        warp_center_lines (list[numpy array(float)]):
+                                    A list of numpy arrays representing the
+                                    coordinates of weft yarn center line points.
+                                    The arrays have num of node rows and 3
+                                    columns.
     """
     x_yarn_spacing = cell_y_size / num_weft
     y_yarn_spacing = cell_x_size / num_warp
@@ -554,10 +554,10 @@ def create_layer2layer_sample(
 
     DomainPlanes = CDomainPlanes(Min, XYZ(Max.x, Max.y, baseline + offset))
     Weft = CTextile()
-    weft_paths = []
+    weft_center_lines = []
     Weft.AssignDomain(DomainPlanes)
     Warp = CTextile()
-    warp_paths = []
+    warp_center_lines = []
     Warp.AssignDomain(DomainPlanes)
 
     for i in range(LayeredTextile.GetNumYarns()):
@@ -619,37 +619,41 @@ def create_layer2layer_sample(
         # points by the domain side length if we are outside the domain.
         # The paths must then be sorted by the dominant direction to not cause
         # issues with line tracing later.
-        yarn_path = []
+        yarn_center_line = []
         SNodes = Yarn.GetSlaveNodes(Yarn.LINE)
         for node in SNodes:
-                pos = node.GetPosition()
-                X = pos.x
-                Y = pos.y
-                Z = pos.z
-                if X < Min.x:
-                    X += Max.x - Min.x
-                elif X > Max.x:
-                    X -= Max.x - Min.x
+            pos = node.GetPosition()
+            X = pos.x
+            Y = pos.y
+            Z = pos.z
+            if X < Min.x:
+                X += Max.x - Min.x
+            elif X > Max.x:
+                X -= Max.x - Min.x
 
-                if Y < Min.y:
-                    Y += Max.y - Min.y
-                elif Y > Max.y:
-                    Y -= Max.y - Min.y
+            if Y < Min.y:
+                Y += Max.y - Min.y
+            elif Y > Max.y:
+                Y -= Max.y - Min.y
 
-                if Z < Min.z:
-                    Z += baseline + offset - Min.z
-                elif Z > baseline + offset:
-                    Z -= baseline + offset - Min.z
-                yarn_path.append([X, Y, Z])
-        yarn_path = np.array(yarn_path)
+            if Z < Min.z:
+                Z += baseline + offset - Min.z
+            elif Z > baseline + offset:
+                Z -= baseline + offset - Min.z
+            yarn_center_line.append([X, Y, Z])
+        yarn_center_line = np.array(yarn_center_line)
         if idx == 0:
-            weft_paths.append(yarn_path[yarn_path[:, 0].argsort()])
+            weft_center_lines.append(
+                yarn_center_line[yarn_center_line[:, 0].argsort()]
+            )
             Weft.AddYarn(Yarn)
         else:
-            warp_paths.append(yarn_path[yarn_path[:, 1].argsort()])
+            warp_center_lines.append(
+                yarn_center_line[yarn_center_line[:, 1].argsort()]
+            )
             Warp.AddYarn(Yarn)
 
-    return Weft, weft_paths, Warp, warp_paths
+    return Weft, weft_center_lines, Warp, warp_center_lines
 
 
 def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
@@ -793,21 +797,23 @@ def generate_woven_composite_sample(config_dict):
     if weave_type == "layer2layer":
         weave_config_dict = check_layer2layer_config_dict(config_dict)
 
-        Weft, weft_paths, Warp, warp_paths = create_layer2layer_sample(
-            weave_config_dict["unit_cell_weft_length"],
-            weave_config_dict["unit_cell_warp_length"],
-            weave_config_dict["unit_cell_thickness"],
-            weave_config_dict["weft_yarns_per_layer"],
-            weave_config_dict["warp_yarns_per_layer"],
-            weave_config_dict["number_of_yarn_layers"],
-            weave_config_dict["weft_width_to_spacing_ratio"],
-            weave_config_dict["warp_width_to_spacing_ratio"],
-            weave_config_dict["weft_to_warp_ratio"],
-            weave_config_dict["weave_pattern"],
-            weave_config_dict["tiling"],
-            weave_config_dict["deform"],
-            weave_config_dict["shift_unit_cell"],
-            weave_config_dict["textile_resolution"],
+        Weft, weft_center_lines, Warp, warp_center_lines = (
+            create_layer2layer_sample(
+                weave_config_dict["unit_cell_weft_length"],
+                weave_config_dict["unit_cell_warp_length"],
+                weave_config_dict["unit_cell_thickness"],
+                weave_config_dict["weft_yarns_per_layer"],
+                weave_config_dict["warp_yarns_per_layer"],
+                weave_config_dict["number_of_yarn_layers"],
+                weave_config_dict["weft_width_to_spacing_ratio"],
+                weave_config_dict["warp_width_to_spacing_ratio"],
+                weave_config_dict["weft_to_warp_ratio"],
+                weave_config_dict["weave_pattern"],
+                weave_config_dict["tiling"],
+                weave_config_dict["deform"],
+                weave_config_dict["shift_unit_cell"],
+                weave_config_dict["textile_resolution"],
+            )
         )
         write_weave_mesh(
             Weft,
@@ -828,18 +834,18 @@ def generate_woven_composite_sample(config_dict):
             weave_config_dict["mesh_paths"][1],
             weave_config_dict["mesh_paths"][2],
         )
-        for idx in range(len(weft_paths)):
-            weft_paths[idx] = weft_paths[idx] - shift
-        for idx in range(len(warp_paths)):
-            warp_paths[idx] = warp_paths[idx] - shift
+        for idx in range(len(weft_center_lines)):
+            weft_center_lines[idx] = weft_center_lines[idx] - shift
+        for idx in range(len(warp_center_lines)):
+            warp_center_lines[idx] = warp_center_lines[idx] - shift
         with open(
             weave_config_dict["mesh_paths"][0].replace(".stl", ".pkl"), "wb"
         ) as file:
-            pk.dump(weft_paths, file)
+            pk.dump(weft_center_lines, file)
         with open(
             weave_config_dict["mesh_paths"][1].replace(".stl", ".pkl"), "wb"
         ) as file:
-            pk.dump(warp_paths, file)
+            pk.dump(warp_center_lines, file)
 
     elif weave_type == "orthogonal":
         weave_config_dict = check_orthogonal_config_dict(config_dict)
