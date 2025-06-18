@@ -1,4 +1,5 @@
 import numpy as np
+import pickle as pk
 import trimesh
 import scipy.interpolate as inp
 from scipy.spatial.transform import Rotation as R
@@ -16,7 +17,7 @@ def generate_yarn_topology(num_nodes, points_per_node):
     node along the yarn.
 
     Args:
-        
+
 
     Keyword args:
         -
@@ -164,6 +165,11 @@ def generate_yarn_spline(
                                      and 3 columns containing the coordinates
                                      of all points making up the triangles in
                                      the yarn.
+
+        center_line (numpy array[float]): An array of shape number of yarn
+                                          cross section rows, and 3 columns
+                                          containing the coordinates of all
+                                          cross section centers along the yarn.
     """
     if deform == []:
         deform = 4 * [0.0]
@@ -265,9 +271,14 @@ def generate_yarn_spline(
         Bs = Rots.apply(Bs)
 
     vertical_asymmetry = np.ones(points_per_node)
+    # We can safely shift r here since it has already been used for R
+    # We need to shift by half the half axis since the the flattening will
+    # affect the center line.
     if flat_top:
+        rs[:,2] -= vertical_half_axis/2
         vertical_asymmetry[: points_per_node // 2] = 0.0
     if flat_bottom:
+        rs[:,2] += vertical_half_axis/2
         vertical_asymmetry[points_per_node // 2 :] = 0.0
 
     tiled_vertical_asymmetry = np.tile(vertical_asymmetry, num_nodes)
@@ -297,7 +308,7 @@ def generate_yarn_spline(
         * Ns
     )
 
-    return points
+    return points, rs
 
 
 def generate_in_plane_sample_points(
@@ -393,8 +404,8 @@ def generate_out_of_plane_sample_points(
                                 starting coordinates in the  directions
                                 orthogonal to the yarn. The first coordinate
                                 determines the position in the side ways
-                                direction and the second coordinate is 1 for 
-                                yarns starting at the top and -1 for yarns 
+                                direction and the second coordinate is 1 for
+                                yarns starting at the top and -1 for yarns
                                 starting at the bottom.
 
         num_crossing (int): The number of yarns in the orthogonal direction that
@@ -406,7 +417,7 @@ def generate_out_of_plane_sample_points(
         direction (int): If 0 the yarn is in the x-direction, if 1 it is in the
                          y-direction.
 
-        roundness (float): A parameter that determines the roundness of the 
+        roundness (float): A parameter that determines the roundness of the
                            out of plane yarns where they change their
                            vertical direction.
 
@@ -487,27 +498,27 @@ def generate_weft_yarns(
         cell_shape (list[float]): A list of length 3 that determines the size
                                   in the x, y, and z-directions of the textile
                                   bounding box.
-                                
+
         num_warp_per_layer (int): The number of warp yarns per layer.
 
         num_weft_per_layer (int): The number of weft yarns per layer.
 
         num_layers (int): The number of yarn layers in the textile (per stack).
                           The weft yarns have one additional layer (top layer).
-        
+
         warp_width (float): The width of the warp yarns.
 
         weft_width (float): The width of the weft yarns.
 
-        weft_thickness (float): The thickness of the weft yarns.   
+        weft_thickness (float): The thickness of the weft yarns.
 
-        binder_thickness (float): The thickness of the binder yarns. 
+        binder_thickness (float): The thickness of the binder yarns.
 
         super_ellipse_power (float): The weft yarn cross section super ellipse
                                      exponent.
 
-        num_stacks (int): The number of times to stack the textile in the 
-                          out-of-plane direction.           
+        num_stacks (int): The number of times to stack the textile in the
+                          out-of-plane direction.
 
     Keyword args:
         deform (list[float]): A list of length 4 where the entries refer to the
@@ -534,9 +545,13 @@ def generate_weft_yarns(
     Returns:
         points (list[numpy array[float]]): A list where each entry corresponds
                                            to the point array of one yarn.
-        
+
         triangles (list[numpy array[int]]): A list where each entry corresponds
                                             to the triangle array of one yarn.
+
+        center_lines (list[numpy array[int]]): A list where each entry
+                                               corresponds to the center line
+                                               array of one yarn.
     """
     start_ys = np.linspace(
         -cell_shape[1] / 2 + cell_shape[1] / num_weft_per_layer / 2,
@@ -554,6 +569,7 @@ def generate_weft_yarns(
 
     points = []
     triangles = []
+    center_lines = []
     offset = cell_shape[2] * (1 - num_stacks) / 2
     for stack in range(num_stacks):
         for idxz, z in enumerate(start_zs):
@@ -569,7 +585,7 @@ def generate_weft_yarns(
                     * binder_thickness
                     / 2,
                 )
-                point = generate_yarn_spline(
+                point, center_line = generate_yarn_spline(
                     sample_points,
                     interpolation_parameter,
                     points_per_node,
@@ -592,9 +608,10 @@ def generate_weft_yarns(
                 )
                 points.append(point)
                 triangles.append(triangle)
+                center_lines.append(center_line)
         offset += cell_shape[2]
 
-    return points, triangles
+    return points, triangles, center_lines
 
 
 def generate_warp_yarns(
@@ -620,29 +637,29 @@ def generate_warp_yarns(
         cell_shape (list[float]): A list of length 3 that determines the size
                                   in the x, y, and z-directions of the textile
                                   bounding box.
-                                
+
         num_warp_per_layer (int): The number of warp yarns per layer.
 
         num_weft_per_layer (int): The number of weft yarns per layer.
 
         num_layers (int): The number of yarn layers in the textile (per stack).
                           The weft yarns have one additional layer (top layer).
-        
+
         warp_width (float): The width of the warp yarns.
 
         warp_thickness (float): The thickness of the weft yarns.
 
-        weft_width (float): The width of the weft yarns. 
-        
+        weft_width (float): The width of the weft yarns.
+
         weft_thickness (float): The thickness of the weft yarns.
 
-        binder_thickness (float): The thickness of the binder yarns.    
+        binder_thickness (float): The thickness of the binder yarns.
 
         super_ellipse_power (float): The weft yarn cross section super ellipse
                                      exponent.
 
-        num_stacks (int): The number of times to stack the textile in the 
-                          out-of-plane direction.           
+        num_stacks (int): The number of times to stack the textile in the
+                          out-of-plane direction.
 
     Keyword args:
         deform (list[float]): A list of length 4 where the entries refer to the
@@ -669,9 +686,13 @@ def generate_warp_yarns(
     Returns:
         points (list[numpy array[float]]): A list where each entry corresponds
                                            to the point array of one yarn.
-        
+
         triangles (list[numpy array[int]]): A list where each entry corresponds
                                             to the triangle array of one yarn.
+
+        center_lines (list[numpy array[int]]): A list where each entry
+                                               corresponds to the center line
+                                               array of one yarn.
     """
     start_xs = np.linspace(
         -cell_shape[0] / 2 + cell_shape[0] / num_warp_per_layer / 2,
@@ -694,6 +715,7 @@ def generate_warp_yarns(
 
     points = []
     triangles = []
+    center_lines = []
 
     offset = cell_shape[2] * (1 - num_stacks) / 2
     for stack in range(num_stacks):
@@ -707,7 +729,7 @@ def generate_warp_yarns(
                     direction=1,
                     crimp=0.0,
                 )
-                point = generate_yarn_spline(
+                point, center_line = generate_yarn_spline(
                     sample_points,
                     interpolation_parameter,
                     points_per_node,
@@ -723,9 +745,10 @@ def generate_warp_yarns(
                 )
                 points.append(point)
                 triangles.append(triangle)
+                center_lines.append(center_line)
         offset += cell_shape[2]
 
-    return points, triangles
+    return points, triangles, center_lines
 
 
 def generate_binder_yarns(
@@ -747,20 +770,20 @@ def generate_binder_yarns(
         cell_shape (list[float]): A list of length 3 that determines the size
                                   in the x, y, and z-directions of the textile
                                   bounding box.
-                                
+
         num_warp_per_layer (int): The number of warp yarns per layer.
 
         num_weft_per_layer (int): The number of weft yarns per layer.
 
         binder_width (float): The width of the binder yarns.
-        
-        binder_thickness (float): The thickness of the binder yarns.    
+
+        binder_thickness (float): The thickness of the binder yarns.
 
         super_ellipse_power (float): The weft yarn cross section super ellipse
                                      exponent.
 
-        num_stacks (int): The number of times to stack the textile in the 
-                          out-of-plane direction.           
+        num_stacks (int): The number of times to stack the textile in the
+                          out-of-plane direction.
 
     Keyword args:
         deform (list[float]): A list of length 4 where the entries refer to the
@@ -787,9 +810,13 @@ def generate_binder_yarns(
     Returns:
         points (list[numpy array[float]]): A list where each entry corresponds
                                            to the point array of one yarn.
-        
+
         triangles (list[numpy array[int]]): A list where each entry corresponds
                                             to the triangle array of one yarn.
+
+        center_lines (list[numpy array[int]]): A list where each entry
+                                               corresponds to the center line
+                                               array of one yarn.
     """
     positions = np.ones((num_warp_per_layer + 1, 2))
     positions[0::2, 1] = -1
@@ -802,6 +829,7 @@ def generate_binder_yarns(
     interpolation_parameter = np.linspace(0, 1, nodes_per_yarn)
     points = []
     triangles = []
+    center_lines = []
 
     offset = cell_shape[2] * (1 - num_stacks) / 2
     for stack in range(num_stacks):
@@ -815,7 +843,7 @@ def generate_binder_yarns(
                 direction=1,
             )
             sample_points[:, 2] += offset
-            point = generate_yarn_spline(
+            point, center_line = generate_yarn_spline(
                 sample_points,
                 interpolation_parameter,
                 points_per_node,
@@ -829,8 +857,9 @@ def generate_binder_yarns(
             triangle = generate_yarn_topology(nodes_per_yarn, points_per_node)
             points.append(point)
             triangles.append(triangle)
+            center_lines.append(center_line)
         offset += cell_shape[2]
-    return points, triangles
+    return points, triangles, center_lines
 
 
 def generate_matrix(cell_shape):
@@ -846,7 +875,7 @@ def generate_matrix(cell_shape):
 
     Returns:
         points (numpy array[float]): The point array of the matrix.
-        
+
         triangles (numpy array[int]): The triangle array of the matrix.
     """
     points = np.array(
@@ -887,7 +916,7 @@ def aggregate_yarns(points, triangles):
     Args:
         points (list[numpy array[float]]): A list where each entry corresponds
                                            to the point array of one yarn.
-        
+
         triangles (list[numpy array[int]]): A list where each entry corresponds
                                             to the triangle array of one yarn.
 
@@ -896,7 +925,7 @@ def aggregate_yarns(points, triangles):
 
     Returns:
         points (numpy array[float]): The point array of the yarns.
-        
+
         triangles (numpy array[int]): The triangle array of the yarns.
     """
     total_num_points = 0
@@ -946,9 +975,9 @@ def create_orthogonal_sample(
 
         unit_cell_warp_length (float): The size of the unit cell in the
                                        warp-direction.
-        
+
         unit_cell_thickness (float): The size of the unit cell in the
-                                     out-of-plane-direction.                        
+                                     out-of-plane-direction.
 
         weft_yarns_per_layer (int): The number of weft yarns per layer
                                     (per unit cell).
@@ -964,7 +993,7 @@ def create_orthogonal_sample(
                                              are in relation to the yarn
                                              spacing.
 
-        weft_super_ellipse_power (float): The weft yarn cross section 
+        weft_super_ellipse_power (float): The weft yarn cross section
                                           super ellipse exponent.
 
         warp_width_to_spacing_ratio (float): A number between 0 and 1 that
@@ -972,7 +1001,7 @@ def create_orthogonal_sample(
                                              are in relation to the yarn
                                              spacing.
 
-        warp_super_ellipse_power (float): The warp yarn cross section 
+        warp_super_ellipse_power (float): The warp yarn cross section
                                           super ellipse exponent.
 
         weft_to_warp_ratio (float): A number between 0 and 1 that determines how
@@ -983,14 +1012,14 @@ def create_orthogonal_sample(
                                                determines how wide the binder
                                                yarns are in relation to the yarn
                                                spacing.
-        
-        binder_thickness_to_spacing_ratio (float): A number between 0 and 1 that 
+
+        binder_thickness_to_spacing_ratio (float): A number between 0 and 1 that
                                                   determines how thick binder
-                                                  yarns are in relation to the 
+                                                  yarns are in relation to the
                                                   gaps between the weft yarns.
 
-                                                  
-        binder_super_ellipse_power (float): The binder yarn cross section 
+
+        binder_super_ellipse_power (float): The binder yarn cross section
                                             super ellipse exponent.
 
         compaction (list[float]): A list of 3 numbers larger than 0 that
@@ -999,7 +1028,7 @@ def create_orthogonal_sample(
                                   direction. The yarn shapes are determined by
                                   the original size and their position is
                                   altered to fit in the compacted box.
-                                                                          
+
         tiling (list[int]): A list of integers that determine the repeats of the
                             defined unit cell. The entries determines the number
                             of repeats in the x-, y-, and z-directions
@@ -1042,9 +1071,9 @@ def create_orthogonal_sample(
                          mesh.
 
         textile_resolution (int): The number of points per cross sections. The
-                                  number of cross sections is computed to 
+                                  number of cross sections is computed to
                                   create a reasonable traingle aspect ratio.
-        
+
     Keyword args:
         -
 
@@ -1087,7 +1116,7 @@ def create_orthogonal_sample(
     for idx in range(3):
         cell_shape[idx] *= compaction[idx]
 
-    points, triangles = generate_weft_yarns(
+    points, triangles, center_lines = generate_weft_yarns(
         cell_shape,
         num_warp_per_layer,
         num_weft_per_layer,
@@ -1111,8 +1140,10 @@ def create_orthogonal_sample(
     weft_mesh = trimesh.Trimesh(
         vertices=aggregated_points, faces=aggregated_triangles
     )
+    with open(weft_path.replace(".stl", ".pkl"), "wb") as file:
+        pk.dump(center_lines, file)
 
-    points, triangles = generate_warp_yarns(
+    points, triangles, center_lines = generate_warp_yarns(
         cell_shape,
         num_warp_per_layer,
         num_weft_per_layer,
@@ -1136,8 +1167,10 @@ def create_orthogonal_sample(
     warp_mesh = trimesh.Trimesh(
         vertices=aggregated_points, faces=aggregated_triangles
     )
+    with open(warp_path.replace(".stl", ".pkl"), "wb") as file:
+        pk.dump(center_lines, file)
 
-    points, triangles = generate_binder_yarns(
+    points, triangles, center_lines = generate_binder_yarns(
         cell_shape,
         num_warp_per_layer,
         num_weft_per_layer,
@@ -1157,6 +1190,9 @@ def create_orthogonal_sample(
     binder_mesh = trimesh.Trimesh(
         vertices=aggregated_points, faces=aggregated_triangles
     )
+    with open(binder_path.replace(".stl", ".pkl"), "wb") as file:
+        pk.dump(center_lines, file)
+
     cell_shape[2] *= tiling[2]
     points, triangles = generate_matrix(cell_shape)
     matrix_mesh = trimesh.Trimesh(vertices=points, faces=triangles)
