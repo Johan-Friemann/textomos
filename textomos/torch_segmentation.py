@@ -36,7 +36,7 @@ class TextomosDatasetBase(Dataset):
     metrics.
     """
 
-    def __init__(self, database_path, z_score):
+    def __init__(self, database_path, z_score, separate_centers=False):
         self.database_path = database_path
         self.mean = z_score[0]
         self.std = z_score[1]
@@ -47,8 +47,9 @@ class TextomosDatasetBase(Dataset):
         self.num_samples, self.num_chunks, self.chunk_size = get_database_shape(
             self.database_path
         )
-        self.num_phases = (  # + 1 since air is also a phase
-            len(get_metadata(database_path, 0, "phase_densities")) + 1
+        self.separate_centers = separate_centers
+        self.num_yarn_types = (  # -1 for matrix
+            len(get_metadata(database_path, 0, "phase_densities")) - 1
         )
 
     def compute_min_max(self, device):
@@ -73,11 +74,11 @@ class TextomosDatasetBase(Dataset):
         for global_idx in range(self.num_samples):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
-
             recon_sample = torch.tensor(
-                self.recon_data[chunk_idx][local_idx][:]
+                get_reconstruction_chunk_handle(
+                    self.database_path, chunk_idx
+                ).get("reconstruction_" + str(local_idx))[:, :, :]
             ).to(device)
-
             min_candidate = torch.min(recon_sample)
             max_candidate = torch.max(recon_sample)
             min_val = torch.min(min_val, min_candidate)
@@ -107,7 +108,9 @@ class TextomosDatasetBase(Dataset):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
             recon_sample = torch.tensor(
-                self.recon_data[chunk_idx][local_idx][:]
+                get_reconstruction_chunk_handle(
+                    self.database_path, chunk_idx
+                ).get("reconstruction_" + str(local_idx))[:, :, :]
             ).to(device)
             mean += torch.mean(recon_sample)
         mean /= self.num_samples
@@ -116,7 +119,9 @@ class TextomosDatasetBase(Dataset):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
             recon_sample = torch.tensor(
-                self.recon_data[chunk_idx][local_idx][:]
+                get_reconstruction_chunk_handle(
+                    self.database_path, chunk_idx
+                ).get("reconstruction_" + str(local_idx))[:, :, :]
             ).to(device)
             var += torch.sum((recon_sample - mean) ** 2)
         var /= self.num_samples * self.slices_per_sample**3 - 1
@@ -140,14 +145,20 @@ class TextomosDatasetBase(Dataset):
                                     frequency balancing weights. They are:
                                     given as [air, phase_1, ..., phase_n].
         """
-        class_freq = torch.zeros(self.num_phases).to(device)
+        class_freq = torch.zeros(
+            2 + self.num_yarn_types * (1 + self.separate_centers)
+        ).to(device)
         for global_idx in range(self.num_samples):
             chunk_idx = global_idx // self.chunk_size
             local_idx = global_idx % self.chunk_size
             seg_sample = torch.tensor(
-                self.seg_data[chunk_idx][local_idx][:]
+                get_segmentation_chunk_handle(
+                    self.database_path, chunk_idx
+                ).get("segmentation_" + str(local_idx))[:, :, :]
             ).to(device)
-            for i in range(self.num_phases):
+            for i in range(
+                2 + self.num_yarn_types * (1 + self.separate_centers)
+            ):
                 class_freq[i] += torch.sum(seg_sample == i)
         median = torch.median(class_freq)
         return median / class_freq
@@ -196,13 +207,21 @@ class TextomosDataset2D(TextomosDatasetBase):
         seg_slice = torch.tensor(seg[slice_idx])
         seg_mask = torch.zeros(
             (
-                self.num_phases,
+                self.num_yarn_types + 2,
                 self.slices_per_sample,
                 self.slices_per_sample,
             )
         )
-        for i in range(self.num_phases):
-            seg_mask[i] = seg_slice == i
+        # air
+        seg_mask[0] = seg_slice == 0
+        # yarns
+        for i in range(self.num_yarn_types):
+            seg_mask[i]
+            seg_mask[i + 1] = seg_slice == i + 1
+            # For 2D mode we dont track center lines
+            seg_mask[i + 1] += seg_slice == i + 1 + self.num_yarn_types
+        # matrix
+        seg_mask[1 + self.num_yarn_types] = seg_slice == 1 + self.num_yarn_types
 
         return recon_slice, seg_mask
 
@@ -292,10 +311,27 @@ class TextomosDataset3D(TextomosDatasetBase):
             ]
         )
         seg_mask = torch.zeros(
-            (self.num_phases, self.patch_size, self.patch_size, self.patch_size)
+            (
+                2 + self.num_yarn_types * (1 + self.separate_centers),
+                self.patch_size,
+                self.patch_size,
+                self.patch_size,
+            )
         )
-        for i in range(self.num_phases):
-            seg_mask[i] = seg_patch == i
+
+        # air
+        seg_mask[0] = seg_patch == 0
+        # yarns
+        for i in range(self.num_yarn_types):
+            seg_mask[i + 1] = seg_patch == i + 1
+            if self.separate_centers:
+                seg_mask[i + 1 + self.num_yarn_types] = (
+                    seg_patch == i + 1 + self.num_yarn_types
+                )
+            else:
+                seg_mask[i + 1] += seg_patch == i + 1 + self.num_yarn_types
+        # matrix
+        seg_mask[1 + self.num_yarn_types] = seg_patch == 1 + self.num_yarn_types
 
         return recon_patch, seg_mask
 
@@ -395,8 +431,8 @@ class TIFFDataset2D(TiffDatasetBase):
         seg_mask = []
         if not self.segmentation is None:
             seg_slice = self.segmentation[idx].unsqueeze(0)
-            seg_mask = torch.zeros((4, 512, 512))
-            for i in range(4):
+            seg_mask = torch.zeros((self.num_phases, 512, 512))
+            for i in range(self.num_phases):
                 seg_mask[i] = seg_slice == i
 
         return recon_slice, seg_mask
@@ -521,14 +557,15 @@ class JaccardLoss(nn.Module):
         -
     """
 
-    def __init__(self):
+    def __init__(self, eps=1e-6):
         super(JaccardLoss, self).__init__()
+        self.eps = eps
 
     def forward(self, inputs, targets):
         inputs = torch.softmax(inputs, 1)
         intersection = torch.sum(inputs * targets, (1, 2, 3))
         union = torch.sum(inputs + targets, (1, 2, 3)) - intersection
-        jaccard_loss = 1 - intersection / union
+        jaccard_loss = 1 - (intersection + self.eps) / (union + self.eps)
         return torch.mean(jaccard_loss)
 
 
@@ -859,6 +896,7 @@ def one_epoch(
     epoch=0,
     writer=None,
     scheduler=None,
+    scaler=None,
 ):
     """Process one (1) epoch.
 
@@ -889,6 +927,10 @@ def one_epoch(
 
         writer (torch summary writer): A summary writer object that logs the
                                        iteration loss values.
+
+        scaler (torch amp grad scaler): Gradient scaler object that prevents
+                                        overflow when working with float16.
+                                        float16 casting is disabled if None.
 
     Returns:
         epoch_loss (float): The epoch loss. This is the sum of all batch losses
@@ -923,15 +965,24 @@ def one_epoch(
 
             optimizer.zero_grad()
             with torch.set_grad_enabled(mode == "training"):
-                outputs = model(inputs)
-                # Handle pytorch model.
-                if type(outputs) is collections.OrderedDict:  #
-                    outputs = outputs["out"]
-
-                loss = criterion(outputs, labels)
+                with torch.amp.autocast(
+                    device_type=str(device),
+                    dtype=torch.float16,
+                    enabled=not scaler is None,
+                ):
+                    outputs = model(inputs)
+                    # Handle pytorch model.
+                    if type(outputs) is collections.OrderedDict:
+                        outputs = outputs["out"]
+                    loss = criterion(outputs, labels)
                 if mode == "training":
-                    loss.backward()
-                    optimizer.step()
+                    if scaler is None:
+                        loss.backward()
+                        optimizer.step()
+                    else:
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
                     if not scheduler is None and not isinstance(
                         scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
                     ):
@@ -975,6 +1026,7 @@ def train_model(
     writer=None,
     scheduler=None,
     state_dict_path=None,
+    float16=False,
 ):
     """Train a torch model for one or more epochs.
 
@@ -1011,9 +1063,12 @@ def train_model(
                                                    Is called once per epoch for
                                                    ReduceLROnPlateau and once
                                                    per iteration else.
+
+        float16 (Bool): Will cast to float16 if True.
     Returns:
         -
     """
+    scaler = torch.amp.GradScaler(str(device)) if float16 else None
     num_space = 32 - len(model.__class__.__name__) - len(str(num_epochs))
 
     print(
@@ -1043,6 +1098,7 @@ def train_model(
             epoch=epoch,
             writer=writer,
             scheduler=scheduler,
+            scaler=scaler,
         )
         training_loss_str = "{:.6f}".format(epoch_training_loss)
         validation_loss_str = "{:.6f}".format(epoch_validation_loss)
@@ -1166,7 +1222,13 @@ def segment_volume_from_slice_dataloader(model, dataloader, slice_axis="x"):
 
 
 def segment_volume_from_patch_dataloader(
-    model, dataloader, patch_size, stride, slice_axis="x", volume_shape=512
+    model,
+    dataloader,
+    patch_size,
+    stride,
+    slice_axis="x",
+    volume_shape=512,
+    float16=False,
 ):
     """Use model to segment volume patch by patch from dataloader.
 
@@ -1189,6 +1251,8 @@ def segment_volume_from_patch_dataloader(
         slice_axis (str): The axis that was had the first index in the array
                           during model training.
 
+        float16 (Bool): Will cast to float16 if True.
+
     Returns:
 
         segmented_volume (torch tensor): A tensor of size len(dataloader) ^ 3
@@ -1196,33 +1260,39 @@ def segment_volume_from_patch_dataloader(
 
     """
     device = next(model.parameters()).device
+    with torch.amp.autocast(
+        device_type=str(device), dtype=torch.float16, enabled=float16
+    ):
+        dummy_in = torch.randn(1,1,patch_size,patch_size,patch_size).to(device)
+        dummy_seg = model(dummy_in)
+        predictions = torch.zeros(
+            (dummy_seg.shape[1], volume_shape, volume_shape, volume_shape),
+            dtype=torch.float32,
+        )
+        iterator = iter(dataloader)
 
-    segmented_volume = torch.zeros(
-        (volume_shape, volume_shape, volume_shape), dtype=torch.uint8
-    )
-    segmented_volume = segmented_volume.to(device)
-    iterator = iter(dataloader)
+        patch_indices = []
+        for i in range(0, volume_shape - patch_size + 1, stride):
+            for j in range(0, volume_shape - patch_size + 1, stride):
+                for k in range(0, volume_shape - patch_size + 1, stride):
+                    patch_indices.append((i, j, k))
+        patch_indices = numpy.array(patch_indices)
+        
+        for idx, input in enumerate(iterator):
+            input = input[0]  # Extract recon only
+            input = input.to(device)
+            seg = model(input)
+            if type(seg) is collections.OrderedDict:  # Handle pytorch model.
+                seg = seg["out"]
+            pred = seg.to("cpu").detach()
+            predictions[
+                :,
+                patch_indices[idx][0] : patch_indices[idx][0] + patch_size,
+                patch_indices[idx][1] : patch_indices[idx][1] + patch_size,
+                patch_indices[idx][2] : patch_indices[idx][2] + patch_size,
+            ] += pred # If we use overlapping patches we sum up logits
 
-    patch_indices = []
-    for i in range(0, volume_shape - patch_size + 1, stride):
-        for j in range(0, volume_shape - patch_size + 1, stride):
-            for k in range(0, volume_shape - patch_size + 1, stride):
-                patch_indices.append((i, j, k))
-    patch_indices = numpy.array(patch_indices)
-
-    for idx, input in enumerate(iterator):
-        input = input[0]  # Extract recon only
-        input = input.to(device)
-        prediction = model(input)
-        if type(prediction) is collections.OrderedDict:  # Handle pytorch model.
-            prediction = prediction["out"]
-        prediction = prediction.argmax(1)
-        segmented_volume[
-            patch_indices[idx][0] : patch_indices[idx][0] + patch_size,
-            patch_indices[idx][1] : patch_indices[idx][1] + patch_size,
-            patch_indices[idx][2] : patch_indices[idx][2] + patch_size,
-        ] = prediction
-
+    segmented_volume = predictions.argmax(0)
     # We need to permute our axes back to match original tiff-file.
     if slice_axis == "x":
         segmented_volume = torch.transpose(segmented_volume, 1, 2)
@@ -1345,7 +1415,7 @@ if __name__ == "__main__":
             optimizer,
             1.0,
             0.0,
-            len(training_set) // batch_size,
+            num_epochs * len(training_set) // batch_size,
         )
 
         train_model(
@@ -1358,6 +1428,7 @@ if __name__ == "__main__":
             writer=writer,
             scheduler=scheduler,
             state_dict_path=state_dict_path,
+            float16=False,
         )
 
     if inference:
