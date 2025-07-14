@@ -1381,7 +1381,7 @@ if __name__ == "__main__":
     train = True
     normalize = True
     shuffle = True
-    batch_size = 4
+    batch_size = 2
     num_epochs = 10
     learn_rate = 0.001
     weight_decay = 0.00001
@@ -1391,7 +1391,7 @@ if __name__ == "__main__":
 
     generator = seed_all(rng_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = build_model(model="fcn_resnet50")
+    model = UNet3D(1,6)
     model = model.to(device)
     writer = SummaryWriter(flush_secs=1)
     if train:
