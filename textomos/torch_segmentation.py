@@ -23,6 +23,7 @@ from torchvision.models.segmentation import (
     fcn_resnet101,
     FCN_ResNet101_Weights,
 )
+from torch_models import *
 from hdf5_utils import (
     get_reconstruction_chunk_handle,
     get_segmentation_chunk_handle,
@@ -247,8 +248,17 @@ class TextomosDataset3D(TextomosDatasetBase):
 
     """
 
-    def __init__(self, database_path, patch_size, stride, z_score=(None, None)):
-        super().__init__(database_path, z_score)
+    def __init__(
+        self,
+        database_path,
+        patch_size,
+        stride,
+        z_score=(None, None),
+        separate_centers=False,
+    ):
+        super().__init__(
+            database_path, z_score, separate_centers=separate_centers
+        )
         self.patch_size = patch_size
         self.stride = stride
 
@@ -325,13 +335,15 @@ class TextomosDataset3D(TextomosDatasetBase):
         for i in range(self.num_yarn_types):
             seg_mask[i + 1] = seg_patch == i + 1
             if self.separate_centers:
-                seg_mask[i + 1 + self.num_yarn_types] = (
-                    seg_patch == i + 1 + self.num_yarn_types
+                seg_mask[i + 2 + self.num_yarn_types] = seg_patch == (
+                    i + 2 + self.num_yarn_types
                 )
             else:
-                seg_mask[i + 1] += seg_patch == i + 1 + self.num_yarn_types
+                seg_mask[i + 1] += seg_patch == (i + 2 + self.num_yarn_types)
         # matrix
-        seg_mask[1 + self.num_yarn_types] = seg_patch == 1 + self.num_yarn_types
+        seg_mask[1 + self.num_yarn_types] = seg_patch == (
+            1 + self.num_yarn_types
+        )
 
         return recon_patch, seg_mask
 
@@ -563,8 +575,8 @@ class JaccardLoss(nn.Module):
 
     def forward(self, inputs, targets):
         inputs = torch.softmax(inputs, 1)
-        intersection = torch.sum(inputs * targets, (1, 2, 3))
-        union = torch.sum(inputs + targets, (1, 2, 3)) - intersection
+        intersection = torch.sum(inputs * targets, (2, 3, 4))
+        union = torch.sum(inputs + targets, (2, 3, 4)) - intersection
         jaccard_loss = 1 - (intersection + self.eps) / (union + self.eps)
         return torch.mean(jaccard_loss)
 
@@ -1263,7 +1275,9 @@ def segment_volume_from_patch_dataloader(
     with torch.amp.autocast(
         device_type=str(device), dtype=torch.float16, enabled=float16
     ):
-        dummy_in = torch.randn(1,1,patch_size,patch_size,patch_size).to(device)
+        dummy_in = torch.randn(1, 1, patch_size, patch_size, patch_size).to(
+            device
+        )
         dummy_seg = model(dummy_in)
         predictions = torch.zeros(
             (dummy_seg.shape[1], volume_shape, volume_shape, volume_shape),
@@ -1277,7 +1291,7 @@ def segment_volume_from_patch_dataloader(
                 for k in range(0, volume_shape - patch_size + 1, stride):
                     patch_indices.append((i, j, k))
         patch_indices = numpy.array(patch_indices)
-        
+
         for idx, input in enumerate(iterator):
             input = input[0]  # Extract recon only
             input = input.to(device)
@@ -1290,7 +1304,9 @@ def segment_volume_from_patch_dataloader(
                 patch_indices[idx][0] : patch_indices[idx][0] + patch_size,
                 patch_indices[idx][1] : patch_indices[idx][1] + patch_size,
                 patch_indices[idx][2] : patch_indices[idx][2] + patch_size,
-            ] += pred # If we use overlapping patches we sum up logits
+            ] += pred[
+                0
+            ]  # If we use overlapping patches we sum up logits
 
     segmented_volume = predictions.argmax(0)
     # We need to permute our axes back to match original tiff-file.
@@ -1350,11 +1366,6 @@ def compute_dataset_loss(model, dataloader, device, loss_function):
 
 
 if __name__ == "__main__":
-    # max: 4.202881813049316
-    # min: 0.0
-    # mean: 0.20771875977516174
-    # std: 0.25910180825541423
-    # balancing weights: [0.1242, 1.0038, 1.0000, 0.6890]
     training_data_path = "./textomos/training_set"
     validation_data_path = "./textomos/validation_set"
     testing_data_path = "./textomos/testing_set"
@@ -1364,9 +1375,8 @@ if __name__ == "__main__":
     )
     inferenece_output_path = "./textomos/ml_segmentation.tiff"
 
-    data_mean = 0.20772
-    data_std = 0.25910
-    data_weight = [0.1242, 1.0038, 1.0000, 0.6890]
+    data_mean = 0.21940
+    data_std = 0.26584
     inference = True
     train = True
     normalize = True
@@ -1384,18 +1394,28 @@ if __name__ == "__main__":
     model = build_model(model="fcn_resnet50")
     model = model.to(device)
     writer = SummaryWriter(flush_secs=1)
-
     if train:
-        training_set = TextomosDataset2D(
-            training_data_path, z_score=(data_mean, data_std)
+        training_set = TextomosDataset3D(
+            training_data_path,
+            128,
+            128,
+            z_score=(data_mean, data_std),
+            separate_centers=True,
         )
-        validation_set = TextomosDataset2D(
-            validation_data_path, z_score=(data_mean, data_std)
+        validation_set = TextomosDataset3D(
+            validation_data_path,
+            128,
+            128,
+            z_score=(data_mean, data_std),
+            separate_centers=True,
         )
-        testing_set = TextomosDataset2D(
-            testing_data_path, z_score=(data_mean, data_std)
+        testing_set = TextomosDataset3D(
+            testing_data_path,
+            128,
+            128,
+            z_score=(data_mean, data_std),
+            separate_centers=True,
         )
-        weight = torch.tensor(data_weight).to(device)
         dataloaders = build_dataloaders_from_multiple_sets(
             [training_set, validation_set, testing_set],
             batch_size,
@@ -1404,12 +1424,12 @@ if __name__ == "__main__":
             shuffle=shuffle,
         )
 
-        criterion = nn.CrossEntropyLoss(weight=weight)
-        optimizer = optim.SGD(
+        criterion = JaccardLoss()
+        optimizer = optim.RAdam(
             model.parameters(),
             lr=learn_rate,
             weight_decay=weight_decay,
-            momentum=momentum,
+            decoupled_weight_decay=True,
         )
         scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
@@ -1428,20 +1448,25 @@ if __name__ == "__main__":
             writer=writer,
             scheduler=scheduler,
             state_dict_path=state_dict_path,
-            float16=False,
+            float16=True,
         )
 
     if inference:
         model.load_state_dict(torch.load(state_dict_path))
         model.eval()
-        test_set = TIFFDataset2D(
+        torch.torch.set_grad_enabled(False)
+        test_set = TIFFDataset3D(
             inferenece_input_path,
+            128,
+            128,
             z_score=(data_mean, data_std),
-            cutoff=(0.0, 1.0),
+            cutoff=(0.0, 0.65),
         )
         test_loader = DataLoader(
             test_set, batch_size=1, shuffle=False, num_workers=1
         )
-        volume = segment_volume_from_slice_dataloader(model, test_loader)
-        volume = volume.cpu().numpy()
+        volume = segment_volume_from_patch_dataloader(
+            model, test_loader, 128, 128, float16=True
+        )
+        volume = volume.cpu().numpy().astype(numpy.int32)
         tifffile.imwrite(inferenece_output_path, volume)
