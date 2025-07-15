@@ -45,7 +45,7 @@ class UNet3D(nn.Module):
 
     Keyword params:
         features (list[int]): A list with the number of features per UNet layer.
-                              Each entry correspodns to a layar in both the
+                              Each entry corresponds to a layer in both the
                               encoder and the decoder.
     """
     def __init__(self, in_channels, out_channels, features=[32, 64, 128, 256]):
