@@ -1,4 +1,9 @@
 import numpy as np
+import tifffile
+import meshio
+from skimage.filters import gaussian
+from scipy import ndimage as ndi
+from structure_tensor import eig_special_2d, structure_tensor_2d
 
 
 def create_nodes(n_x, n_y, n_z, voxel_size):
@@ -213,3 +218,65 @@ def create_boundary_node_pairs(n_x, n_y, n_z):
     )
 
     return nodal_pairs
+
+
+def structure_tensor_analysis(
+    segmentation, material_classes, slice_axes, rho=4.0, sigma=0.25
+):
+    """Perform a slice wise structure tensor analysis to infer material
+       orientation. The analisis is performed per material class in
+       different directions (can be the same).
+
+    Args:
+        segmentation (np array[int]): The segmentation to perform analysis on.
+
+        material_classes (list [int]): A list of ints corresponding to the
+                                       material class indices to analyze.
+
+        slice_axes (list [int]): A list of ints corresponding to the directions
+                                 to slice the segmentation while performing
+                                 analyses. It should have the same length as
+                                 material_classes.
+
+    Keyword args:
+        rho (float): The rho parameter in the structure tensor analyis code.
+
+        sigma (float): The sigma parameter in the structure tensor analyis code.
+
+    Returns:
+        orientations (np array[float]): An n_x*n_y*n_z by 3 array containing the
+                                        orientation vectors per voxel.
+                                        Unassigned voxels (matrix etc) are
+                                        zero vectors.
+    """
+    dims = segmentation.shape
+    x = np.zeros(dims)
+    y = np.zeros(dims)
+    z = np.zeros(dims)
+
+    for material_class, slice_axis in zip(material_classes, slice_axes):
+        material = segmentation == material_class
+        for idx in range(dims[slice_axis]):
+            if slice_axis == 0:
+                s = np.index_exp[idx, :, :]
+            elif slice_axis == 1:
+                s = np.index_exp[:, idx, :]
+            else:
+                s = np.index_exp[:, :, idx]
+            slice = material[s]
+            distance_field = ndi.distance_transform_edt(slice)
+            distance_field = gaussian(distance_field)
+            S = structure_tensor_2d(distance_field, sigma, rho)
+            _, vec = eig_special_2d(S)
+
+            # += because we dont want to zero the previous yarn type
+            if slice_axis == 0:
+                x[s] += slice * vec[1]
+                y[s] += slice * vec[0]
+            elif slice_axis == 1:
+                x[s] += slice * vec[1]
+                z[s] += slice * vec[0]
+            else:
+                y[s] += slice * vec[1]
+                z[s] += slice * vec[0]
+    return np.column_stack((x.flatten(), y.flatten(), z.flatten()))
