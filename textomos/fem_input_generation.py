@@ -5,6 +5,8 @@ from skimage.filters import gaussian
 from scipy import ndimage as ndi
 from structure_tensor import eig_special_2d, structure_tensor_2d
 
+import matplotlib.pyplot as plt
+
 
 def create_nodes(n_x, n_y, n_z, voxel_size):
     """Create the nodes of a structured mesh with linear hexahedral elements.
@@ -221,7 +223,7 @@ def create_boundary_node_pairs(n_x, n_y, n_z):
 
 
 def structure_tensor_analysis(
-    segmentation, material_classes, slice_axes, rho=4.0, sigma=0.25
+    segmentation, material_classes, slice_axes, rho=2.0, sigma=0.25
 ):
     """Perform a slice wise structure tensor analysis to infer material
        orientation. The analisis is performed per material class in
@@ -265,18 +267,78 @@ def structure_tensor_analysis(
                 s = np.index_exp[:, :, idx]
             slice = material[s]
             distance_field = ndi.distance_transform_edt(slice)
+            distance_field += (
+                np.random.random_sample(size=distance_field.shape) * 0.1
+            )
             distance_field = gaussian(distance_field)
             S = structure_tensor_2d(distance_field, sigma, rho)
             _, vec = eig_special_2d(S)
 
             # += because we dont want to zero the previous yarn type
-            if slice_axis == 0:
-                x[s] += slice * vec[1]
-                y[s] += slice * vec[0]
-            elif slice_axis == 1:
-                x[s] += slice * vec[1]
-                z[s] += slice * vec[0]
+            if slice_axis == 0:  # We align vectors with + y-axis
+                x[s] += slice * vec[1] * np.sign(vec[0])
+                y[s] += np.abs(slice * vec[0])
+            elif slice_axis == 1:  # We align vectors with + z-axis
+                x[s] += slice * vec[1] * np.sign(vec[0])
+                z[s] += np.abs(slice * vec[0])
             else:
                 y[s] += slice * vec[1]
                 z[s] += slice * vec[0]
     return np.column_stack((x.flatten(), y.flatten(), z.flatten()))
+
+
+def volume_fraction_analysis(
+    segmentation, material_classes, slice_axes, expected_areas, voxel_area
+):
+    """Perform a slice wise analysis of yarn fiber volume fraction. Perform
+       the analyis per material class.
+
+    Args:
+        segmentation (np array[int]): The segmentation to perform analysis on.
+
+        material_classes (list [int]): A list of ints corresponding to the
+                                       material class indices to analyze.
+
+        slice_axes (list [int]): A list of ints corresponding to the directions
+                                 to slice the segmentation while performing
+                                 analyses. It should have the same length as
+                                 material_classes.
+
+        expected_areas (list [float]): The expected area of all the fibers in a
+                                       slice. It should be the same length
+                                       as material_classes. Typically computed:
+                                       num_yarns*fiber_area*num_fiber_per_yarn.
+                                       Should be given in the same unit as
+                                       voxel area.
+
+        voxel area (float): The area of a voxel (pixel).
+
+    Keyword args:
+        -
+
+    Returns:
+        volume_fractions (np array[float]): An array with the same shape as the
+                                            input segmenation. The entires are
+                                            the fiber volume fractions.
+                                            Unassigned voxels are assigned 0.0.
+    """
+    dims = segmentation.shape
+    volume_fractions = np.zeros(dims)
+    for material_class, slice_axis, expected_area in zip(
+        material_classes, slice_axes, expected_areas
+    ):
+        material = segmentation == material_class
+        for idx in range(dims[slice_axis]):
+            if slice_axis == 0:
+                s = np.index_exp[idx, :, :]
+            elif slice_axis == 1:
+                s = np.index_exp[:, idx, :]
+            else:
+                s = np.index_exp[:, :, idx]
+            slice = material[s]
+            num_voxels = np.sum(slice)
+            # += because we dont want to zero the previous yarn type
+            volume_fractions[s] += slice * (
+                expected_area / (num_voxels * voxel_area)
+            )
+    return volume_fractions
