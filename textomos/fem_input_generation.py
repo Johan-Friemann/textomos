@@ -8,6 +8,48 @@ from structure_tensor import eig_special_2d, structure_tensor_2d
 import matplotlib.pyplot as plt
 
 
+def chamis_micromechanical_model(
+    E_f11, E_f22, G_f12, G_f23, v_f12, k_f, E_m, G_m, v_m
+):
+    """Compute homogenized composite properties with the Chamis micromechanical
+       model.
+
+    Args:
+       E_f11 (float): Longitudinal Young's modulus of the fibers.
+
+       E_f22 (float): Transverse Young's modulus of the fibers.
+
+       G_f12 (float): Longitudinal-Transverse shear modulus of the fibers.
+
+       G_f23 (float): Transverse-Transverse shear modulus of the fibers.
+
+       v_f12 (float): Longitudinal-Transverse Poisson's ratio of the fibers.
+
+       k_f (float): Fiber volume fraction.
+
+       E_m (float): Young's modulus of the matrix.
+
+       G_m (float): Shear modulus of the matrix.
+
+       v_m (float): Poisson's ratio of the matrix.
+
+    Keyword args:
+        -
+
+    Returns:
+        properties (np array[float]): An array with the homogenized properties.
+    """
+
+    E_11 = k_f * E_f11 + (1 - k_f) * E_m
+    E_22 = E_33 = -E_m / (1 - np.sqrt(k_f) * (1 - E_m / E_f22))
+    G_12 = G_13 = G_m / (1 - np.sqrt(k_f) * (1 - G_m / G_f12))
+    G_23 = G_m / (1 - np.sqrt(k_f) * (1 - G_m * G_f23))
+    v_12 = v_13 = k_f * v_f12 + (1 - k_f) * v_m
+    v_23 = E_22 / (2 * G_23) - 1
+
+    return np.array([E_11, E_22, E_33, v_12, v_13, v_23, G_12, G_23, G_13])
+
+
 def create_nodes(n_x, n_y, n_z, voxel_size):
     """Create the nodes of a structured mesh with linear hexahedral elements.
 
