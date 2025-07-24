@@ -165,7 +165,11 @@ def create_boundary_node_pairs(n_x, n_y, n_z):
         -
 
     Returns:
-        nodal_pairs (dict[np array[int]]): ---
+        nodal_pairs (dict[np array[int]]): A dictionary containing arrays of
+                                           nodal constraint pairs for faces
+                                           and edges. The shapes are num_pairs
+                                           (per face/edge) by 2. The corners are
+                                           stored as points.
     """
     nodes = np.arange((n_x + 1) * (n_y + 1) * (n_z + 1)).reshape(
         (n_z + 1), (n_y + 1), (n_x + 1)
@@ -202,64 +206,44 @@ def create_boundary_node_pairs(n_x, n_y, n_z):
     front_left = nodes[1:-1, 0, 0]
     front_right = nodes[1:-1, 0, -1]
     back_left = nodes[1:-1, -1, 0]
-    nodal_pairs["back_right_to_back_left"] = np.column_stack(
-        (back_right.flatten(), back_left.flatten())
+    nodal_pairs["top_left_to_bottom_left"] = np.column_stack(
+        (top_left.flatten(), bottom_left.flatten())
     )
-    nodal_pairs["back_right_to_front_right"] = np.column_stack(
-        (back_right.flatten(), front_right.flatten())
+    nodal_pairs["bottom_back_to_bottom_front"] = np.column_stack(
+        (bottom_back.flatten(), bottom_front.flatten())
     )
-    nodal_pairs["back_right_to_front_left"] = np.column_stack(
-        (back_right.flatten(), front_left.flatten())
+    nodal_pairs["front_right_to_front_left"] = np.column_stack(
+        (front_right.flatten(), front_left.flatten())
     )
-    nodal_pairs["top_back_to_bottom_back"] = np.column_stack(
-        (top_back.flatten(), bottom_back.flatten())
+    nodal_pairs["back_left_to_front_left"] = np.column_stack(
+        (back_left.flatten(), front_left.flatten())
     )
-    nodal_pairs["top_back_to_top_front"] = np.column_stack(
-        (top_back.flatten(), top_front.flatten())
+    nodal_pairs["bottom_right_to_bottom_left"] = np.column_stack(
+        (bottom_right.flatten(), bottom_left.flatten())
     )
-    nodal_pairs["top_back_to_bottom_front"] = np.column_stack(
-        (top_back.flatten(), bottom_front.flatten())
-    )
-    nodal_pairs["top_right_to_top_left"] = np.column_stack(
-        (top_right.flatten(), top_left.flatten())
-    )
-    nodal_pairs["top_right_to_bottom_right"] = np.column_stack(
-        (top_right.flatten(), bottom_right.flatten())
+    nodal_pairs["top_front_to_bottom_front"] = np.column_stack(
+        (top_front.flatten(), bottom_front.flatten())
     )
     nodal_pairs["top_right_to_bottom_left"] = np.column_stack(
         (top_right.flatten(), bottom_left.flatten())
     )
+    nodal_pairs["top_back_to_bottom_front"] = np.column_stack(
+        (top_back.flatten(), bottom_front.flatten())
+    )
+    nodal_pairs["back_right_to_front_left"] = np.column_stack(
+        (back_right.flatten(), front_left.flatten())
+    )
 
     # Vertices
-    top_back_right = nodes[-1, -1, -1]
-    top_front_right = nodes[-1, 0, -1]
-    bottom_back_left = nodes[0, -1, 0]
-    bottom_front_left = nodes[0, 0, 0]
-    top_front_left = nodes[-1, 0, 0]
-    bottom_back_right = nodes[0, -1, -1]
-    top_back_left = nodes[-1, -1, 0]
-    bottom_front_right = nodes[0, 0, -1]
-    nodal_pairs["top_back_right_to_top_front_right"] = np.column_stack(
-        (top_back_right.flatten(), top_front_right.flatten())
-    )
-    nodal_pairs["top_back_right_to_top_back_left"] = np.column_stack(
-        (top_back_right.flatten(), top_back_left.flatten())
-    )
-    nodal_pairs["top_back_right_to_bottom_back_right"] = np.column_stack(
-        (top_back_right.flatten(), bottom_back_right.flatten())
-    )
-    nodal_pairs["top_back_right_to_bottom_back_left"] = np.column_stack(
-        (top_back_right.flatten(), bottom_back_left.flatten())
-    )
-    nodal_pairs["top_back_right_to_top_front_left"] = np.column_stack(
-        (top_back_right.flatten(), top_front_left.flatten())
-    )
-    nodal_pairs["top_back_right_to_bottom_front_right"] = np.column_stack(
-        (top_back_right.flatten(), bottom_front_right.flatten())
-    )
-    nodal_pairs["top_back_right_to_bottom_front_left"] = np.column_stack(
-        (top_back_right.flatten(), bottom_front_left.flatten())
-    )
+
+    nodal_pairs["top_back_right"] = nodes[-1, -1, -1]
+    nodal_pairs["top_front_right"] = nodes[-1, 0, -1]
+    nodal_pairs["bottom_back_left"] = nodes[0, -1, 0]
+    nodal_pairs["bottom_front_left"] = nodes[0, 0, 0]
+    nodal_pairs["top_front_left"] = nodes[-1, 0, 0]
+    nodal_pairs["bottom_back_right"] = nodes[0, -1, -1]
+    nodal_pairs["top_back_left"] = nodes[-1, -1, 0]
+    nodal_pairs["bottom_front_right"] = nodes[0, 0, -1]
 
     return nodal_pairs
 
