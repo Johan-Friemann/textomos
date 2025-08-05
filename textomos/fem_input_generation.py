@@ -5,11 +5,11 @@ from skimage.filters import gaussian
 from scipy import ndimage as ndi
 from structure_tensor import eig_special_2d, structure_tensor_2d
 
-import matplotlib.pyplot as plt
+from fem_input_LSDYNA import *
 
 
 def chamis_micromechanical_model(
-    E_f11, E_f22, G_f12, G_f23, v_f12, k_f, E_m, G_m, v_m
+    E_f11, E_f22, G_f12, G_f23, v_f12, k_f, E_m, v_m
 ):
     """Compute homogenized composite properties with the Chamis micromechanical
        model.
@@ -29,8 +29,6 @@ def chamis_micromechanical_model(
 
        E_m (float): Young's modulus of the matrix.
 
-       G_m (float): Shear modulus of the matrix.
-
        v_m (float): Poisson's ratio of the matrix.
 
     Keyword args:
@@ -39,15 +37,20 @@ def chamis_micromechanical_model(
     Returns:
         properties (np array[float]): An array with the homogenized properties.
     """
-
+    G_m = E_m / (2 * (1 + v_m))
     E_11 = k_f * E_f11 + (1 - k_f) * E_m
-    E_22 = E_33 = -E_m / (1 - np.sqrt(k_f) * (1 - E_m / E_f22))
+    E_22 = E_33 = E_m / (1 - np.sqrt(k_f) * (1 - E_m / E_f22))
     G_12 = G_13 = G_m / (1 - np.sqrt(k_f) * (1 - G_m / G_f12))
-    G_23 = G_m / (1 - np.sqrt(k_f) * (1 - G_m * G_f23))
+    G_23 = G_m / (1 - np.sqrt(k_f) * (1 - G_m / G_f23))
     v_12 = v_13 = k_f * v_f12 + (1 - k_f) * v_m
     v_23 = E_22 / (2 * G_23) - 1
+    
+    v_21 = v_12 * E_22 / E_11 
+    v_31 = v_13 * E_33 / E_11
+    v_32 = v_23 * E_33 / E_22
+    G_31 = G_13
 
-    return np.array([E_11, E_22, E_33, v_12, v_13, v_23, G_12, G_23, G_13])
+    return np.array([E_11, E_22, E_33, v_21, v_31, v_32, G_12, G_23, G_31]).T
 
 
 def create_nodes(n_x, n_y, n_z, voxel_size):
