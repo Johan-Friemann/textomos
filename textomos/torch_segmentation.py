@@ -1,3 +1,5 @@
+import sys
+import os
 import random
 import itertools
 import collections
@@ -1036,6 +1038,9 @@ def train_model(
     device,
     num_epochs,
     writer=None,
+    start_epoch=0,
+    end_epoch=None,
+    best_loss=None,
     scheduler=None,
     state_dict_path=None,
     float16=False,
@@ -1065,10 +1070,22 @@ def train_model(
         writer (torch summary writer): A summary writer object that logs the
                                        iteration loss values.
 
+        start_epoch (int): The epoch number to start from. This is useful when
+                           continuing training from a state dict.
+
+        end_epoch (int): The epoch number to end at. This is useful when
+                         training in one epoch at a time from a batch script.
+                         The default value is None, which will result in
+                         end_epoch being equal to num_epochs.
+
+        best_loss (float): The best loss value so far. Only used to mark prints
+                           as new current best. The default value none results
+                           in an arbitrary large number. Useful to pass when
+                           training one epoch at a time from a batch script.
+
         state_dict_path (str): The absolute path to where to save the state
                                dictionary. The function continuously saves the
-                               set of weights that results in the current lowest
-                               validation loss
+                               model weights and optimizer state.
 
         scheduler (torch learning rate scheduler): The learning rate scheduler.
                                                    to utilze during training.
@@ -1080,20 +1097,30 @@ def train_model(
     Returns:
         -
     """
+    if end_epoch is None:
+        end_epoch = num_epochs
     scaler = torch.amp.GradScaler(str(device)) if float16 else None
     num_space = 32 - len(model.__class__.__name__) - len(str(num_epochs))
-
     print(
         "-" * 66 + "\n||" + " " * (num_space // 2 - 1),
         f"Training model: '{model.__class__.__name__}' for {num_epochs} epochs",
         " " * (num_space // 2 + (num_space % 2) - 1) + "||",
         "\n" + "-" * 66,
     )
-
-    best_loss = (
-        10e6  # Just put a big value to ensure non-convergence at step 1.
+    current_lr_str = "{:.6f}".format(scheduler.get_last_lr()[0])
+    num_space = 36 - len(current_lr_str)
+    print(
+        "||" + " " * (num_space // 2 - 1),
+        "Current learning rate is: " + current_lr_str,
+        " " * (num_space // 2 + (num_space % 2) - 1) + "||",
     )
-    for epoch in range(num_epochs):
+    print("-" * 66)
+    if best_loss is None:
+        best_loss = (
+            10e6  # Just put a big value to ensure non-convergence at step 1.
+        )
+
+    for epoch in range(start_epoch, end_epoch):
         num_space = 55 - len(str(epoch + 1)) - len(str(num_epochs))
         print(
             "||" + " " * (num_space // 2 - 1),
@@ -1127,8 +1154,18 @@ def train_model(
         if epoch_validation_loss < best_loss:
             best_loss = epoch_validation_loss
             validation_loss_str += " *"
-            if state_dict_path is not None:
-                torch.save(model.state_dict(), state_dict_path)
+        if state_dict_path is not None:
+            torch.save(
+                {
+                    "epoch": epoch
+                    + 1,  # +1 since we save after finishing epoch
+                    "best_loss": best_loss,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                },
+                state_dict_path,
+            )
         num_space = 39 - len(validation_loss_str)
         print(
             "||" + " " * (num_space // 2 - 1),
@@ -1369,12 +1406,12 @@ if __name__ == "__main__":
     training_data_path = "./textomos/training_set"
     validation_data_path = "./textomos/validation_set"
     testing_data_path = "./textomos/testing_set"
-    state_dict_path = "./textomos/state_dict_fcn50.pt"
+    state_dict_path = "./textomos/state_dict_unet3d.pt"
+    continue_from_state = True
     inferenece_input_path = (
         "./textomos/reconstructions/real_layer2layer_sample_reconstruction.tiff"
     )
     inferenece_output_path = "./textomos/ml_segmentation.tiff"
-
     data_mean = 0.21940
     data_std = 0.26584
     inference = True
@@ -1385,15 +1422,18 @@ if __name__ == "__main__":
     num_epochs = 10
     learn_rate = 0.001
     weight_decay = 0.00001
-    momentum = 0.99
     num_workers = 4
     rng_seed = 0
+    model = UNet3D(1, 6)
 
     generator = seed_all(rng_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = UNet3D(1,6)
     model = model.to(device)
-    writer = SummaryWriter(flush_secs=1)
+    #writer = SummaryWriter(flush_secs=1)
+    writer=None
+    end_epoch=num_epochs
+    if len(sys.argv) > 1:
+        end_epoch = int(sys.argv[1])
     if train:
         training_set = TextomosDataset3D(
             training_data_path,
@@ -1438,6 +1478,16 @@ if __name__ == "__main__":
             num_epochs * len(training_set) // batch_size,
         )
 
+        start_epoch = 0
+        best_loss = None
+        if continue_from_state and os.path.isfile(state_dict_path):
+            state_dict = torch.load(state_dict_path)
+            start_epoch = state_dict["epoch"]
+            best_loss = state_dict["best_loss"]
+            model.load_state_dict(state_dict["model_state_dict"])
+            optimizer.load_state_dict(state_dict["optimizer_state_dict"])
+            scheduler.load_state_dict(state_dict["scheduler_state_dict"])
+
         train_model(
             model,
             criterion,
@@ -1446,13 +1496,17 @@ if __name__ == "__main__":
             device,
             num_epochs,
             writer=writer,
+            start_epoch=start_epoch,
+            end_epoch=end_epoch,
+            best_loss=best_loss,
             scheduler=scheduler,
             state_dict_path=state_dict_path,
             float16=True,
         )
 
     if inference:
-        model.load_state_dict(torch.load(state_dict_path))
+        state_dict = torch.load(state_dict_path)
+        model.load_state_dict(state_dict["model_state_dict"])
         model.eval()
         torch.torch.set_grad_enabled(False)
         test_set = TIFFDataset3D(
