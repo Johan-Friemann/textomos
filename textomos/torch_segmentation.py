@@ -1429,10 +1429,13 @@ if __name__ == "__main__":
     generator = seed_all(rng_seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    writer = SummaryWriter(flush_secs=1)
     end_epoch=num_epochs
     if len(sys.argv) > 1:
         end_epoch = int(sys.argv[1])
+    if len(sys.argv) > 2:
+        writer = SummaryWriter(sys.argv[2],flush_secs=1)
+    else:
+        writer = SummaryWriter(flush_secs=1)
     if train:
         training_set = TextomosDataset3D(
             training_data_path,
