@@ -581,7 +581,7 @@ def write_elements_LSDYNA(elements, orientations, materials, file):
     ):
         if orientation[1] == 0.0 and orientation[2] != 0.0:
             coordinate_vector = np.array([0.0, 1.0, 0.0])
-        elif orientation[2] == 0.0 and orientation[0] != 0.0:
+        elif orientation[2] == 0.0 and orientation[1] != 0.0:
             coordinate_vector = np.array([0.0, 0.0, 1.0])
         else:
             coordinate_vector = np.array([1.0, 0.0, 0.0])
