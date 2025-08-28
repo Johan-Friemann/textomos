@@ -4,12 +4,12 @@ import meshio
 from skimage.filters import gaussian
 from scipy import ndimage as ndi
 from structure_tensor import eig_special_2d, structure_tensor_2d
-
+import matplotlib.pyplot as plt
 from fem_input_LSDYNA import *
 
 
 def chamis_micromechanical_model(
-    E_f11, E_f22, G_f12, G_f23, v_f12, k_f, E_m, v_m
+    E_f11, E_f22, G_f12, G_f23, v_f12, E_m, v_m, k_f
 ):
     """Compute homogenized composite properties with the Chamis micromechanical
        model.
@@ -25,11 +25,11 @@ def chamis_micromechanical_model(
 
        v_f12 (float): Longitudinal-Transverse Poisson's ratio of the fibers.
 
-       k_f (float): Fiber volume fraction.
-
        E_m (float): Young's modulus of the matrix.
 
        v_m (float): Poisson's ratio of the matrix.
+
+       k_f (float): Fiber volume fraction.
 
     Keyword args:
         -
@@ -44,8 +44,8 @@ def chamis_micromechanical_model(
     G_23 = G_m / (1 - np.sqrt(k_f) * (1 - G_m / G_f23))
     v_12 = v_13 = k_f * v_f12 + (1 - k_f) * v_m
     v_23 = E_22 / (2 * G_23) - 1
-    
-    v_21 = v_12 * E_22 / E_11 
+
+    v_21 = v_12 * E_22 / E_11
     v_31 = v_13 * E_33 / E_11
     v_32 = v_23 * E_33 / E_22
     G_31 = G_13
@@ -317,13 +317,20 @@ def structure_tensor_analysis(
 
 
 def volume_fraction_analysis(
-    segmentation, material_classes, slice_axes, expected_areas, voxel_area
+    segmentation,
+    orientations,
+    material_classes,
+    slice_axes,
+    expected_areas,
+    voxel_area,
 ):
     """Perform a slice wise analysis of yarn fiber volume fraction. Perform
        the analyis per material class.
 
     Args:
         segmentation (np array[int]): The segmentation to perform analysis on.
+
+        orientation (np array[float]): The fiber orientations.
 
         material_classes (list [int]): A list of ints corresponding to the
                                        material class indices to analyze.
@@ -360,14 +367,123 @@ def volume_fraction_analysis(
         for idx in range(dims[slice_axis]):
             if slice_axis == 0:
                 s = np.index_exp[idx, :, :]
+                scale = orientations[:, 2].reshape(dims[0], dims[1], dims[2])[s]
             elif slice_axis == 1:
                 s = np.index_exp[:, idx, :]
+                scale = orientations[:, 1].reshape(dims[0], dims[1], dims[2])[s]
             else:
                 s = np.index_exp[:, :, idx]
+                scale = orientations[:, 0].reshape(dims[0], dims[1], dims[2])[s]
             slice = material[s]
-            num_voxels = np.sum(slice)
+            num_voxels = np.sum(slice * scale)
             # += because we dont want to zero the previous yarn type
             volume_fractions[s] += slice * (
                 expected_area / (num_voxels * voxel_area)
             )
     return volume_fractions
+
+
+def fem_input_from_tiff(
+    in_path,
+    voxel_size,
+    constituent_properties,
+    out_path,
+    num_bins=20,
+    load_magnitude=1.0,
+    load_case="epsilon_22",
+    code="LSDYNA",
+):
+    """Build a unit cell analysis input file from a segmentation TIFF-file.
+
+    Args:
+        in_path (str): The absolute path to the TIFF to build the mesh from.
+
+        voxel_size (float): The reconstruction voxel size corresponding to the
+                            segmentation.
+
+        constituent_properties (list [float]): A list of floats corresponding to
+                                               the fiber and matrix constituent
+                                               mechanical properties.
+
+        out_path (str): The absolute path to where to save the FE-code input.
+
+    Keyword args:
+        num_bins (int): The number of distinct volume fraction bins to use. This
+                        is used to avoid creating too many material "cards"
+                        in the input files.
+
+        load_magnitude (float): The strain magnitude to apply in the unit cell
+                                analysis.
+
+        load_case (str): What load case to run. Can be: "epsilon_11",
+                         "epsilon_22", "epsilon_33", "epsilon_12", "epsilon_23",
+                         or "epsilon_13".
+
+        code (str): For what FE-code should the input file be created. Currently
+                    only supports "LSDYNA".
+
+    Returns:
+        None
+    """
+    segmentation = tifffile.imread(in_path)
+    segmentation[segmentation == 0] = 3  # We set spurious air to matrix
+    dims = segmentation.shape  # We have to bear in mind that z is stored first
+    rve_shape = [
+        dims[2] * voxel_size,
+        dims[1] * voxel_size,
+        dims[0] * voxel_size,
+    ]
+
+    elements = create_elements(dims[2], dims[1], dims[0])
+    points = create_nodes(dims[2], dims[1], dims[0], voxel_size)
+    nodal_pairs = create_boundary_node_pairs(dims[2], dims[1], dims[0])
+    orientation = structure_tensor_analysis(segmentation, (1, 2), (1, 0))
+    vol_fraction = volume_fraction_analysis(
+        segmentation,
+        orientation,
+        (1, 2),
+        (0, 1),
+        (
+            4 * 7 * 12000 * 5.2e-6**2 * np.pi / 4,
+            8 * 6 * 24000 * 5.2e-6**2 * np.pi / 4,
+        ),
+        voxel_size * voxel_size,
+    )
+
+    lower = np.min(vol_fraction[np.nonzero(vol_fraction)])
+    upper = np.max(vol_fraction[np.nonzero(vol_fraction)])
+    bins = np.zeros(num_bins)
+    bins[1:] = np.linspace(lower, upper, num_bins - 1)
+    bin_centers = np.zeros(num_bins - 1)
+    bin_centers[1:] = (bins[2:] + bins[1:-1]) / 2
+    mat_props = chamis_micromechanical_model(
+        constituent_properties[0],
+        constituent_properties[1],
+        constituent_properties[2],
+        constituent_properties[3],
+        constituent_properties[4],
+        constituent_properties[5],
+        constituent_properties[6],
+        bin_centers,
+    )
+    bins[
+        -1
+    ] += 0.1  # We want both lower and upper inclusivity so we shift right
+    binned_vol_fraction = np.digitize(vol_fraction.flatten(), bins)
+
+    if code == "LSDYNA":
+        file = open(out_path, "w")
+        write_header_LSDYNA(file, 1.0)
+        write_materials_LSDYNA(mat_props, file)
+        write_nodes_LSDYNA(points, file)
+        write_elements_LSDYNA(elements, orientation, binned_vol_fraction, file)
+        write_periodic_constraints_LSDYNA(nodal_pairs, file)
+        write_load_constraints_LSDYNA(
+            nodal_pairs, rve_shape, load_magnitude, load_case, file
+        )
+        write_footer_LSDYNA(file)
+        file.close()
+    else:
+        raise NotImplementedError("Only LSDYNA implemented!")
+
+    return None
