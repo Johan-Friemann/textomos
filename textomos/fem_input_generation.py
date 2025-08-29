@@ -1,10 +1,8 @@
 import numpy as np
 import tifffile
-import meshio
 from skimage.filters import gaussian
 from scipy import ndimage as ndi
 from structure_tensor import eig_special_2d, structure_tensor_2d
-import matplotlib.pyplot as plt
 from fem_input_LSDYNA import *
 
 
@@ -487,3 +485,20 @@ def fem_input_from_tiff(
         raise NotImplementedError("Only LSDYNA implemented!")
 
     return None
+
+if __name__ == "__main__":
+    constituent_properties = [
+        276.0e9,
+        20.7e9,
+        13.7e9,
+        17.0e9,
+        0.2,
+        3.0e9,
+        0.34,
+    ]
+    fem_input_from_tiff(
+        "./textomos/RVE_1.tiff",
+        47e-6,
+        constituent_properties,
+        "./textomos/test.k",
+    )
