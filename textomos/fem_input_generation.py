@@ -467,14 +467,14 @@ def fem_input_from_tiff(
     bins[
         -1
     ] += 0.1  # We want both lower and upper inclusivity so we shift right
-    binned_vol_fraction = np.digitize(vol_fraction.flatten(), bins)
+    vol_fraction_bin_ids = np.digitize(vol_fraction.flatten(), bins)
 
     if code == "LSDYNA":
         file = open(out_path, "w")
-        write_header_LSDYNA(file, 1.0)
+        write_header_LSDYNA(1.0, file)
         write_materials_LSDYNA(mat_props, file)
         write_nodes_LSDYNA(points, file)
-        write_elements_LSDYNA(elements, orientation, binned_vol_fraction, file)
+        write_elements_LSDYNA(elements, orientation, vol_fraction_bin_ids, file)
         write_periodic_constraints_LSDYNA(nodal_pairs, file)
         write_load_constraints_LSDYNA(
             nodal_pairs, rve_shape, load_magnitude, load_case, file
@@ -485,20 +485,3 @@ def fem_input_from_tiff(
         raise NotImplementedError("Only LSDYNA implemented!")
 
     return None
-
-if __name__ == "__main__":
-    constituent_properties = [
-        276.0e9,
-        20.7e9,
-        13.7e9,
-        17.0e9,
-        0.2,
-        3.0e9,
-        0.34,
-    ]
-    fem_input_from_tiff(
-        "./textomos/RVE_1.tiff",
-        47e-6,
-        constituent_properties,
-        "./textomos/test.k",
-    )
