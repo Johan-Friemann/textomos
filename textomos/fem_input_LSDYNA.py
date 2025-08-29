@@ -2,7 +2,23 @@ import numpy as np
 
 
 def write_periodic_constraints_LSDYNA(nodal_pairs, file):
-    """DOCSTRING"""
+    """Write periodic boundary constraints to file.
+
+    Args:
+       nodal_pairs (dict[np array[int]]): A dictionary containing arrays of
+                                          nodal constraint pairs for faces
+                                          and edges. The shapes are num_pairs
+                                          (per face/edge) by 2. The corners are
+                                          stored as points.
+
+       file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     constraint_id = 1
     # Faces
     for pair in nodal_pairs["top_to_bottom"]:
@@ -330,11 +346,38 @@ def write_periodic_constraints_LSDYNA(nodal_pairs, file):
             )
         )
 
+    return None
+
 
 def write_load_constraints_LSDYNA(
     nodal_pairs, rve_shape, strain_magnitude, load_case, file
 ):
-    """DOCSTRING"""
+    """Write load displacement constraints to file. This includes locking the
+       reference corner node.
+
+    Args:
+       nodal_pairs (dict[np array[int]]): A dictionary containing arrays of
+                                          nodal constraint pairs for faces
+                                          and edges. The shapes are num_pairs
+                                          (per face/edge) by 2. The corners are
+                                          stored as points.
+
+       rve_shape (list[float]): The [x, y, z] dimensions of the unit cell.
+
+       strain_magnitude (float): The target macroscopic strain magnitude.
+
+       load_case (str): What load case to run. Can be: "epsilon_11",
+                        "epsilon_22", "epsilon_33", "epsilon_12", "epsilon_23",
+                        or "epsilon_13".
+
+       file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     file.write("*DEFINE_CURVE\n")
     file.write(  # Same for all load cases.
         "{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}\n".format(
@@ -562,9 +605,24 @@ def write_load_constraints_LSDYNA(
             )
         )
 
+    return None
+
 
 def write_nodes_LSDYNA(nodes, file):
-    """DOCSTRING"""
+    """Write node coordinates to file.
+
+    Args:
+        nodes (np array[float]): A (n_x+1)*(n_y+1)*(n_z+1) by 3 array with the
+                                 nodal coordinates.
+
+       file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     file.write("*NODE\n")
     for idx, node in enumerate(nodes):
         file.write(
@@ -573,8 +631,30 @@ def write_nodes_LSDYNA(nodes, file):
             )
         )
 
+    return None
+
 
 def write_elements_LSDYNA(elements, orientations, materials, file):
+    """Write element connectivity to file.
+
+    Args:
+        elements (np array[int]): An n_x*n_y*n_z by 8 array with the element
+                                  node connectivities.
+
+        orientations (np array[float]): An n_x*n_y*n_z by 3 array containing the
+                                        orientation vectors per element.
+
+        materials (np array[int]): An n_x*n_y*n_z long array containing the
+                                   material card ids per element.
+
+        file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     file.write("*ELEMENT_SOLID_ORTHO\n")
     for idx, (element, orientation, material) in enumerate(
         zip(elements, orientations, materials)
@@ -615,9 +695,24 @@ def write_elements_LSDYNA(elements, orientations, materials, file):
             )
         )
 
+    return None
+
 
 def write_materials_LSDYNA(mat_props, file):
-    """DOCSTRING"""
+    """Write material cards to file.
+
+    Args:
+        mat_props (np array[float]): A num material cards by 6 array with
+                                     orthotropic material elastic properties
+
+        file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     for idx, mat_prop in enumerate(mat_props):
         file.write("*MAT_ORTHOTROPIC_ELASTIC_TITLE\n")
         file.write("material_ortho_{}\n".format(idx + 1))
@@ -662,26 +757,42 @@ def write_materials_LSDYNA(mat_props, file):
         file.write("section_solid_{}\n".format(idx + 1))
         file.write("{:>10}{:>10}{:>10}\n".format(idx + 1, 1, 0))
 
+    return None
 
-def write_header_LSDYNA(file, dt):
-    """DOCSTRING"""
+
+def write_header_LSDYNA(dt0, file, linear_solver=23, solver=1):
+    """Write header with solver options to file.
+
+    Args:
+        dt0 (float): Initial time step.
+
+        file (file): An open file to write to.
+
+    Keyword args:
+        linear_solver (int): What linear solver to use, refer to LSDYNA docs.
+
+        solver (int): What solution method to use, refer to LSDYNA docs.
+
+    Returns:
+        None
+    """
     file.write("*KEYWORD\n")
     file.write("*CONTROL_IMPLICIT_GENERAL\n")
     file.write(
         "{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}\n".format(
-            1, dt, 2, 1, 2, 0, 0, 0
+            1, dt0, 2, 1, 2, 0, 0, 0
         )
     )
     file.write("*CONTROL_IMPLICIT_SOLVER\n")
     file.write(
         "{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}\n".format(
-            23, 1, 2, 0, 4, 1.0, 1, 0.00000001
+            linear_solver, 1, 2, 0, 4, 1.0, 1, 0.00000001
         )
     )
     file.write("*CONTROL_IMPLICIT_SOLUTION\n")
     file.write(
         "{:>10}{:>10}{:>10}{:>10}{:>10}{:>10.5g}{:>10}{:>10.5g}\n".format(
-            1, 11, 15, 0.001, 0.01, 1e10, 0.9, 1e-10
+            solver, 11, 15, 0.001, 0.01, 1e10, 0.9, 1e-10
         )
     )
     file.write("*CONTROL_TERMINATION\n")
@@ -693,11 +804,25 @@ def write_header_LSDYNA(file, dt):
     file.write("*DATABASE_BINARY_D3PLOT\n")
     file.write(
         "{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}{:>10}\n".format(
-            dt, 0, 0, 0, 0, "", "", ""
+            dt0, 0, 0, 0, 0, "", "", ""
         )
     )
 
+    return None
+
 
 def write_footer_LSDYNA(file):
-    """DOCSTRING"""
+    """Write footer to file.
+
+    Args:
+        file (file): An open file to write to.
+
+    Keyword args:
+        -
+
+    Returns:
+        None
+    """
     file.write("*END\n")
+
+    return None
