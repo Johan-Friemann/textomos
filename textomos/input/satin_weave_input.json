@@ -1,0 +1,22 @@
+{
+    "mesh_paths": [
+        "./textomos/meshes/weft.stl",
+        "./textomos/meshes/warp.stl",
+        "./textomos/meshes/matrix.stl"
+    ],
+
+    "weave_type": "satin_weave",
+    "shift_unit_cell": true,
+    "unit_cell_weft_length": 11.0,
+    "unit_cell_warp_length": 11.0,
+    "unit_cell_thickness": 0.37,
+    "weft_yarns_per_layer": 5,
+    "warp_yarns_per_layer": 5,
+    "number_of_yarn_layers": 1,
+    "weft_width_to_spacing_ratio": 0.99,
+    "warp_width_to_spacing_ratio": 0.99,
+    "weft_to_warp_ratio": 0.99,
+    "weave_pattern": "5HS",
+    "tiling": [2, 2, 2],
+    "textile_resolution": 12
+}

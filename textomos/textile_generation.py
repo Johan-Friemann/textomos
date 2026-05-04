@@ -376,6 +376,163 @@ def check_orthogonal_config_dict(config_dict):
     return dict(zip(req_keys + opt_keys, args))
 
 
+def check_satin_weave_config_dict(config_dict):
+    """Check that a config dict pertaining a satin weave unit cell is valid.
+    If invalid an appropriate exception is raised.
+
+     Args:
+         config_dict (dictionary): A dictionary of tex_ray options.
+
+     Keyword args:
+         -
+
+     Returns:
+        satin_weave_dict (dict): A dictionary consisting of relevant satin weave 
+                                 UC generation parameters.
+
+    """
+    args = []
+    req_keys = (
+        "mesh_paths",
+        "unit_cell_weft_length",
+        "unit_cell_warp_length",
+        "unit_cell_thickness",
+        "weft_yarns_per_layer",
+        "warp_yarns_per_layer",
+        "number_of_yarn_layers",
+        "weft_width_to_spacing_ratio",
+        "warp_width_to_spacing_ratio",
+        "weft_to_warp_ratio",
+    )
+
+    req_types = (
+        list,
+        float,
+        float,
+        float,
+        int,
+        int,
+        int,
+        float,
+        float,
+        float,
+    )
+
+    for req_key, req_type in zip(req_keys, req_types):
+        args.append(config_dict.get(req_key))
+        if args[-1] is None:
+            raise TextileConfigError(
+                "Missing required config entry: '"
+                + req_key
+                + "' of type "
+                + str(req_type)
+                + "."
+            )
+        if not isinstance(args[-1], req_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for required config entry '"
+                + req_key
+                + "'. Should be: "
+                + str(req_type)
+                + "."
+            )
+
+        if req_key == "mesh_paths":
+            for s in args[-1]:
+                if not isinstance(s, str):
+                    raise TypeError(
+                        "All entries of 'mesh_paths' must be strings."
+                    )
+        else:
+            if not args[-1] > 0:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be > 0."
+                )
+            if (  # Two of the entries also have upper bounds.
+                req_key == "weft_width_to_spacing_ratio"
+                or req_key == "warp_width_to_spacing_ratio"
+                or req_key == "weft_to_warp_ratio"
+            ) and not args[-1] < 1:
+                raise ValueError(
+                    "The given value "
+                    + str(args[-1])
+                    + " of '"
+                    + req_key
+                    + "' is invalid. It should be < 1."
+                )
+
+    opt_keys = (
+        "deform",
+        "tiling",
+        "shift_unit_cell",
+        "textile_resolution",
+        "weave_pattern",
+        "cut_mesh",
+    )
+    def_vals = ([], [1, 1, 1], False, 20, "5HS", "weft")
+    opt_types = (list, list, bool, int, str, str)
+
+    for opt_key, opt_type, def_val in zip(opt_keys, opt_types, def_vals):
+        args.append(config_dict.get(opt_key, def_val))
+        if not isinstance(args[-1], opt_type):
+            raise TypeError(
+                "Invalid type "
+                + str(type(args[-1]))
+                + " for optional config entry '"
+                + opt_key
+                + "'. Should be: "
+                + str(opt_type)
+                + "."
+            )
+
+        if opt_key == "textile_resolution":
+            if args[-1] < 1:
+                raise ValueError("The entry 'textile_resolution' must >= 1.")
+
+        if opt_key == "deform":  # Special exception raising for 'deform'
+            if not len(args[-1]) in [0, 12]:
+                raise ValueError("The entry 'deform' must have length 0 or 12.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], float):
+                    raise TypeError("All entries of 'deform' must be floats.")
+                if args[-1][i] < 0.0:
+                    raise ValueError("All entries of 'deform' must >= 0.")
+                if i in [0, 1, 6, 7] and args[-1][i] > 100.0:
+                    raise ValueError(
+                        "All scaling entries (0,1,6, and 7) of 'deform' must "
+                        + " <= 100.0."
+                    )
+        if opt_key == "tiling":
+            if not len(args[-1]) == 3:
+                raise ValueError("The entry 'tiling' must have length 3.")
+            for i in range(len(args[-1])):
+                if not isinstance(args[-1][i], int):
+                    raise TypeError("All entries of 'tiling' must be ints.")
+                if args[-1][i] < 1:
+                    raise ValueError("All entries of 'deform' must >= 1.")
+
+        # Special exception raising for weave_pattern and cut_mesh
+        if opt_key == "weave_pattern":
+            if args[-1] not in ["5HS", "7HS", "8HS"]:
+                raise ValueError(
+                    "The option 'weave_pattern' can only be '5HS' or '8HS'."
+                )
+            
+        if opt_key == "cut_mesh":
+            if args[-1] not in ["weft", "warp"]:
+                raise ValueError(
+                    "The option 'cut_mesh' can only be 'weft' or 'warp'."
+                )
+
+    return dict(zip(req_keys + opt_keys, args))
+
+
 def create_layer2layer_sample(
     cell_x_size,
     cell_y_size,
@@ -656,6 +813,182 @@ def create_layer2layer_sample(
     return Weft, weft_center_lines, Warp, warp_center_lines
 
 
+def create_satin_weave_sample(
+    cell_x_size,
+    cell_y_size,
+    cell_z_size,
+    num_weft,
+    num_warp,
+    num_layers,
+    weft_spacing_ratio,
+    warp_spacing_ratio,
+    weft_to_warp_ratio,
+    weave_pattern,
+    tiling,
+    deform,
+    shift_unit_cell,
+    textile_resolution,
+):
+
+    def generate_pattern(weave_pattern, num_x, num_y):
+        pattern = []
+
+        # -------------------------
+        # Satin (e.g. "5HS")
+        # -------------------------
+        if weave_pattern and weave_pattern.endswith("HS"):
+            n = int(weave_pattern[:-2])
+
+            # Find valid step (coprime with n)
+            step = 1
+            for s in range(2, n):
+                if np.gcd(s, n) == 1:
+                    step = s
+                    break
+
+            for i in range(n):
+                pattern.append((i % num_x, (i * step) % num_y))
+
+        # -------------------------
+        # Fallback
+        # -------------------------
+        else:
+            for i in range(num_x):
+                pattern.append((i, i % num_y))
+
+        return pattern
+
+    # -------------------------
+    # 1. DERIVE PARAMETERS
+    # -------------------------
+    tx, ty, tz = tiling
+
+    num_x = num_warp
+    num_y = num_weft
+
+    warp_spacing = cell_x_size / num_warp
+    weft_spacing = cell_y_size / num_weft
+
+    spacing = (
+        warp_spacing * warp_spacing_ratio +
+        weft_spacing * weft_spacing_ratio
+    ) / (warp_spacing_ratio + weft_spacing_ratio)
+
+    total_thickness = cell_z_size / num_layers
+    warp_thickness = total_thickness * (1.0 / (1.0 + weft_to_warp_ratio))
+    weft_thickness = total_thickness * (weft_to_warp_ratio / (1.0 + weft_to_warp_ratio))
+
+    layer_spacing = total_thickness
+
+    # -------------------------
+    # 2. Create base weave
+    # -------------------------
+    weave = CTextileWeave2D(num_x, num_y, spacing, total_thickness, True, True)
+
+    weave.SetGapSize(0)
+    weave.SetYarnWidths(spacing * 0.98)
+
+    pattern = generate_pattern(weave_pattern, num_x, num_y)
+
+    for (i, j) in pattern:
+        weave.SwapPosition(i, j)
+
+    for i in range(num_x):
+        weave.SetXYarnWidths(i, spacing * 0.98)
+        weave.SetXYarnHeights(i, warp_thickness)
+        weave.SetXYarnSpacings(i, spacing)
+
+    for i in range(num_y):
+        weave.SetYYarnWidths(i, spacing * 0.98)
+        weave.SetYYarnHeights(i, weft_thickness)
+        weave.SetYYarnSpacings(i, spacing)
+
+    weave.SetResolution(textile_resolution)
+
+    # -------------------------
+    # 3. Stack layers
+    # -------------------------
+    layered = CTextileLayered()
+    offset = XYZ(0, 0, 0)
+
+    total_layers = num_layers * tz
+
+    for _ in range(total_layers):
+
+        layered.AddLayer(weave, XYZ(offset.x, offset.y, offset.z))
+
+        if shift_unit_cell:
+            offset.x = np.random.uniform(0, cell_x_size)
+            offset.y = np.random.uniform(0, cell_x_size)
+
+        offset.z += layer_spacing
+
+    # -------------------------
+    # 4. Domain
+    # -------------------------
+    cell_x_size_total = cell_x_size * tx
+    cell_y_size_total = cell_y_size * ty
+
+    Min = XYZ()
+    Max = XYZ()
+
+    domain_tmp = weave.GetDefaultDomain()
+    domain_tmp.GetBoxLimits(Min, Max)
+
+    z_min = Min.z
+    z_max = Min.z + tz * num_layers * layer_spacing
+
+    domain = CDomainPlanes(
+        XYZ(Min.x, Min.y, z_min),
+        XYZ(Min.x + cell_x_size_total, Min.y + cell_y_size_total, z_max)
+    )
+
+    layered.AssignDomain(domain)
+
+    textile_name = AddTextile(layered)
+    textile = GetTextile(textile_name)
+
+    # -------------------------
+    # 5. Split warp/weft
+    # -------------------------
+    Warp = CTextile()
+    Weft = CTextile()
+
+    Warp.AssignDomain(domain)
+    Weft.AssignDomain(domain)
+
+    warp_lines = []
+    weft_lines = []
+
+    for i in range(textile.GetNumYarns()):
+        yarn = textile.GetYarn(i)
+        nodes = yarn.GetSlaveNodes(yarn.LINE)
+
+        if len(nodes) < 2:
+            continue
+
+        coords = []
+        dx = dy = 0.0
+
+        for j in range(len(nodes)):
+            p = nodes[j].GetPosition()
+            coords.append([p.x, p.y, p.z])
+
+            if j < len(nodes) - 1:
+                p2 = nodes[j + 1].GetPosition()
+                dx += abs(p2.x - p.x)
+                dy += abs(p2.y - p.y)
+
+        if dx > dy:
+            Warp.AddYarn(yarn)
+            warp_lines.append(sorted(coords, key=lambda p: p[0]))
+        else:
+            Weft.AddYarn(yarn)
+            weft_lines.append(sorted(coords, key=lambda p: p[1]))
+
+    return Weft, weft_lines, Warp, warp_lines
+
+
 def write_weave_mesh(weft, warp, weft_path, warp_path, matrix_path):
     """Write meshes for the weft, warp, and matrix from TexGen objects
        representing the weft and warp yarns. The meshes are saved as stl files.
@@ -879,6 +1212,37 @@ def generate_woven_composite_sample(config_dict):
             sys.exit(
                 99
             )  # We use this to not crash batch run if trimesh crashes
+
+    elif weave_type == "satin_weave":
+        weave_config_dict = check_satin_weave_config_dict(config_dict)
+
+        Weft, weft_center_lines, Warp, warp_center_lines = (
+            create_satin_weave_sample(
+                weave_config_dict["unit_cell_weft_length"],
+                weave_config_dict["unit_cell_warp_length"],
+                weave_config_dict["unit_cell_thickness"],
+                weave_config_dict["weft_yarns_per_layer"],
+                weave_config_dict["warp_yarns_per_layer"],
+                weave_config_dict["number_of_yarn_layers"],
+                weave_config_dict["weft_width_to_spacing_ratio"],
+                weave_config_dict["warp_width_to_spacing_ratio"],
+                weave_config_dict["weft_to_warp_ratio"],
+                weave_config_dict["weave_pattern"],
+                weave_config_dict["tiling"],
+                weave_config_dict["deform"],
+                weave_config_dict["shift_unit_cell"],
+                weave_config_dict["textile_resolution"],
+            )
+        )
+
+        write_weave_mesh(
+            Weft,
+            Warp,
+            weave_config_dict["mesh_paths"][0],
+            weave_config_dict["mesh_paths"][1],
+            weave_config_dict["mesh_paths"][2],
+        )
+        
     else:
         raise NotImplementedError(
             "The weave type '" + str(weave_type) + "' is not available."
